@@ -44,7 +44,13 @@ final readonly class E2ERunner
         $result = $this->processRunner->run($plan);
 
         if (! $result->isSuccessful()) {
-            throw new RuntimeException(sprintf("E2E command failed (exit %d).\n\nSTDOUT:\n%s\n\nSTDERR:\n%s", $result->exitCode, $result->stdout, $result->stderr));
+            throw new RuntimeException(
+                "E2E command failed (exit {$result->exitCode}).\n\n".
+                    "CMD:\n{$plan->command->command}\n\n".
+                    "CWD:\n{$plan->command->workingDirectory}\n\n".
+                    "STDOUT:\n{$result->stdout}\n\n".
+                    "STDERR:\n{$result->stderr}"
+            );
         }
 
         $report = $this->reportReader->readForRun($context);
@@ -58,7 +64,7 @@ final readonly class E2ERunner
                 }
             }
 
-            throw new RuntimeException(sprintf("E2E failures:\n%s", implode("\n", $lines)));
+            throw new RuntimeException("E2E failures for {$projectName} ({$runId}):\n".implode("\n", $lines));
         }
     }
 }

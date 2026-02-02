@@ -19,7 +19,7 @@
     },
     "autoload": {
         "psr-4": {
-            "valcuandrei\\PestE2E\\": "src/"
+            "ValcuAndrei\\PestE2E\\": "src/"
         },
         "files": [
             "src/Autoload.php"

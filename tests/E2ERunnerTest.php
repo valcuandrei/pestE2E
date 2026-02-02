@@ -32,15 +32,19 @@ it('runs a project command and ingests the json report', function () {
         ],
     ], JSON_THROW_ON_ERROR);
 
-    // For shell: '\'' ends single-quoted span, adds literal ', restarts single-quoted span
-    $reportPathShell = "'\''".str_replace("'", "'\\''", $reportPath)."'\''";
-    $reportJsonShell = "'\''".str_replace("'", "'\\''", $reportJson)."'\''";
+    $reportB64 = base64_encode($reportJson);
+
+    $command = 'php -r "file_put_contents('
+        .var_export($reportPath, true)
+        .', base64_decode('
+        .var_export($reportB64, true)
+        .'));"';
 
     $project = new ProjectConfigDTO(
         name: $projectName,
         dir: getcwd(),
         runner: 'Playwright',
-        command: "php -r 'file_put_contents({$reportPathShell},{$reportJsonShell});'",
+        command: $command,
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
@@ -57,12 +61,16 @@ it('runs a project command and ingests the json report', function () {
         runIdGenerator: new FixedRunIdGenerator($runId),
     );
 
-    $runner->run($projectName);
+    try {
+        $runner->run($projectName);
 
-    expect(file_exists($reportPath))->toBeTrue();
-    $data = json_decode(file_get_contents($reportPath), true, 512, JSON_THROW_ON_ERROR);
-    expect($data['project'])->toBe($projectName);
-    expect($data['runId'])->toBe($runId);
+        expect(filesize($reportPath))->toBeGreaterThan(0);
 
-    @unlink($reportPath);
+        $data = json_decode(file_get_contents($reportPath), true, 512, JSON_THROW_ON_ERROR);
+
+        expect($data['project'])->toBe($projectName)
+            ->and($data['runId'])->toBe($runId);
+    } finally {
+        @unlink($reportPath);
+    }
 });
