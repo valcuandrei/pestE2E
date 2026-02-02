@@ -1,0 +1,46 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ValcuAndrei\PestE2E\Readers;
+
+use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
+use ValcuAndrei\PestE2E\DTO\RunContextDTO;
+use ValcuAndrei\PestE2E\Exceptions\JsonReportParserException;
+use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
+
+/**
+ * @internal
+ */
+final readonly class JsonReportReader
+{
+    /**
+     * @param  JsonReportParser  $parser  (optional) parser
+     */
+    public function __construct(
+        private JsonReportParser $parser = new JsonReportParser,
+    ) {}
+
+    /**
+     * Read the report for a run.
+     */
+    public function readForRun(RunContextDTO $context): JsonReportDTO
+    {
+        $path = $context->project->reportPath;
+        $report = $this->parser->parseFile($path);
+
+        if ($report->project !== $context->project->name) {
+            throw new JsonReportParserException(
+                "JSON report project mismatch: expected {$context->project->name}, got {$report->project}"
+            );
+        }
+
+        if ($report->runId !== $context->runId) {
+            throw new JsonReportParserException(
+                "JSON report runId mismatch: expected {$context->runId}, got {$report->runId}"
+            );
+        }
+
+        return $report;
+    }
+}

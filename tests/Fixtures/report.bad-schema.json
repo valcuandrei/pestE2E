@@ -1,0 +1,12 @@
+{
+    "schema": "some-other-schema",
+    "project": "frontend",
+    "runId": "run-123",
+    "stats": {
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": 0
+    },
+    "tests": []
+}

@@ -1,0 +1,36 @@
+{
+    "schema": "pest-e2e.v1",
+    "project": "frontend",
+    "runId": "run-123",
+    "stats": {
+        "passed": 1,
+        "failed": 1,
+        "skipped": 0,
+        "durationMs": 4200
+    },
+    "tests": [
+        {
+            "name": "can login",
+            "status": "passed",
+            "file": "tests/e2e/auth.spec.ts",
+            "durationMs": 1200
+        },
+        {
+            "name": "can checkout",
+            "status": "failed",
+            "file": "tests/e2e/cart.spec.ts",
+            "durationMs": 900,
+            "error": {
+                "message": "expected visible",
+                "stack": "stack..."
+            },
+            "artifacts": {
+                "trace": "storage/e2e/run-123/trace.zip",
+                "video": "storage/e2e/run-123/video.webm",
+                "screenshots": [
+                    "storage/e2e/run-123/1.png"
+                ]
+            }
+        }
+    ]
+}
