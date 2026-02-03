@@ -46,7 +46,8 @@ final class ProjectRegistry
     public function get(string $name): ProjectConfigDTO
     {
         if (! $this->has($name)) {
-            throw new \InvalidArgumentException("E2E project not registered: {$name}");
+            $known = implode(', ', array_keys($this->projects));
+            throw new RuntimeException("Unknown E2E project [{$name}]. Known: {$known}");
         }
 
         return $this->projects[$name];

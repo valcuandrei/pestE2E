@@ -22,7 +22,8 @@
             "ValcuAndrei\\PestE2E\\": "src/"
         },
         "files": [
-            "src/Autoload.php"
+            "src/Autoload.php",
+            "pest-plugin.php"
         ]
     },
     "require-dev": {

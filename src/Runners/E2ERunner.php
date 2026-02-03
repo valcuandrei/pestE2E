@@ -45,10 +45,10 @@ final readonly class E2ERunner
 
         if (! $result->isSuccessful()) {
             throw new RuntimeException(
-                "E2E command failed (exit {$result->exitCode}).\n\n".
-                    "CMD:\n{$plan->command->command}\n\n".
-                    "CWD:\n{$plan->command->workingDirectory}\n\n".
-                    "STDOUT:\n{$result->stdout}\n\n".
+                "E2E command failed (exit {$result->exitCode}).\n\n" .
+                    "CMD:\n{$plan->command->command}\n\n" .
+                    "CWD:\n{$plan->command->workingDirectory}\n\n" .
+                    "STDOUT:\n{$result->stdout}\n\n" .
                     "STDERR:\n{$result->stderr}"
             );
         }
