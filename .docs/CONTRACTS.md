@@ -8,9 +8,10 @@ Injected into every Node process:
 - `PEST_E2E_PARAMS_FILE` (absolute path)
 
 ## Suite execution contract
-- JS suite must emit JUnit XML
+
+- JS suite must emit a **JSON report**
+- The report must conform to the `pest-e2e.v1` schema
 - File path must match project config
-- Nested suites supported
 
 ## call() contract
 - Node harness loads module + export

@@ -85,5 +85,12 @@ When spawning Node, the plugin injects:
 ---
 
 ## 8) Reporting format (v1)
-- JUnit is required for v1
-- Suite execution must emit a JUnit file
+
+- The v1 reporting format is **JSON**
+- JS runners must emit a JSON report matching the `pest-e2e.v1` schema
+- The report must include:
+  - project
+  - runId
+  - stats
+  - test list with pass/fail + optional error info
+- JUnit support may be added later as an adapter

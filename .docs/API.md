@@ -12,7 +12,7 @@ e2e()->project('frontend', fn ($p) => $p
     ->dir('js')
     ->runner('playwright') // informational only
     ->command('npx playwright test') // executed in the same environment as Pest
-    ->report('junit', 'storage/e2e/frontend/junit.xml')
+    ->report('json', 'storage/e2e/frontend/report.json')
     ->env(['APP_URL' => 'http://localhost'])
     ->params(['baseUrl' => 'http://localhost'])
 );
