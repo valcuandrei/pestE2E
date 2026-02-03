@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Registries;
 
+use RuntimeException;
 use ValcuAndrei\PestE2E\DTO\ProjectConfigDTO;
 
 /**

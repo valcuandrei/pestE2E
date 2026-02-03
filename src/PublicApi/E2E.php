@@ -20,14 +20,12 @@ final class E2E
 
     /**
      * Get the instance of the E2E class (singleton).
-     *
-     * @return self
      */
     public static function instance(): self
     {
         $root = CompositionRoot::instance();
 
-        if (self::$instance === null || self::$instance->root !== $root) {
+        if (! self::$instance instanceof \ValcuAndrei\PestE2E\PublicApi\E2E || self::$instance->root !== $root) {
             self::$instance = new self($root);
         }
 
@@ -36,10 +34,6 @@ final class E2E
 
     /**
      * Register a project.
-     *
-     * @param string $name
-     * @param Closure $configure
-     * @return void
      */
     public function project(string $name, Closure $configure): void
     {
@@ -52,9 +46,6 @@ final class E2E
 
     /**
      * Get a project handle.
-     *
-     * @param string $name
-     * @return E2EProjectHandle
      */
     public function projectHandle(string $name): E2EProjectHandle
     {

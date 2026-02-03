@@ -13,10 +13,13 @@ use ValcuAndrei\PestE2E\DTO\ProjectConfigDTO;
 final class ProjectBuilder
 {
     private ?string $dir = null;
+
     private ?string $runner = null; // informational only
+
     private ?string $command = null;
 
     private ?string $reportType = null;
+
     private ?string $reportPath = null;
 
     /** @var array<string,string> */
@@ -32,12 +35,14 @@ final class ProjectBuilder
     public function dir(string $dir): self
     {
         $this->dir = $dir;
+
         return $this;
     }
 
     public function runner(string $runner): self
     {
         $this->runner = $runner;
+
         return $this;
     }
 
@@ -45,6 +50,7 @@ final class ProjectBuilder
     {
         // Per spec: MUST NOT include sail/docker wrappers — enforcement can be added later.
         $this->command = $command;
+
         return $this;
     }
 
@@ -52,6 +58,7 @@ final class ProjectBuilder
     {
         $this->reportType = $type;
         $this->reportPath = $path;
+
         return $this;
     }
 
@@ -59,6 +66,7 @@ final class ProjectBuilder
     public function env(array $env): self
     {
         $this->env = array_replace($this->env, $env);
+
         return $this;
     }
 
@@ -66,6 +74,7 @@ final class ProjectBuilder
     public function params(array $params): self
     {
         $this->params = array_replace($this->params, $params);
+
         return $this;
     }
 

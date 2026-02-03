@@ -36,24 +36,24 @@ it('throws a readable exception when the json report contains failures', functio
     ], JSON_THROW_ON_ERROR);
 
     $command = 'php -r "file_put_contents('
-        . var_export($reportPath, true)
-        . ', base64_decode('
-        . var_export(base64_encode($reportJson), true)
-        . '));"';
+        .var_export($reportPath, true)
+        .', base64_decode('
+        .var_export(base64_encode($reportJson), true)
+        .'));"';
 
     try {
         e2e()->project(
             $projectName,
-            fn($p) => $p
+            fn ($p) => $p
                 ->dir(getcwd())
                 ->runner('Playwright')
                 ->command($command)
                 ->report('json', $reportPath)
         );
 
-        expect(fn() => e2e($projectName)->run())
+        expect(fn () => e2e($projectName)->run())
             ->toThrow(RuntimeException::class, 'E2E failures')
-            ->and(fn() => e2e($projectName)->run())
+            ->and(fn () => e2e($projectName)->run())
             ->toThrow(RuntimeException::class, 'it fails');
     } finally {
         @unlink($reportPath);
