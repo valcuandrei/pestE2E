@@ -59,6 +59,47 @@ final class E2EProjectHandle
     }
 
     /**
+     * With auth ticket.
+     */
+    public function withAuthTicket(string $ticket): self
+    {
+        /** @var array<string, mixed> $mergedParams */
+        $mergedParams = array_replace_recursive($this->params, [
+            'auth' => [
+                'ticket' => $ticket,
+            ],
+        ]);
+
+        $clone = clone $this;
+        $clone->params = $mergedParams;
+
+        return $clone;
+    }
+
+    /**
+     * Issue an auth ticket for a user.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    public function actingAs(mixed $user, array $meta = []): self
+    {
+        $issuer = CompositionRoot::instance()->authTicketIssuer();
+        $ticket = $issuer->issueForUser($user, $meta);
+
+        return $this->withAuthTicket($ticket);
+    }
+
+    /**
+     * Alias for actingAs().
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    public function loginAs(mixed $user, array $meta = []): self
+    {
+        return $this->actingAs($user, $meta);
+    }
+
+    /**
      * With options.
      */
     public function withOptions(ProcessOptionsDTO $options): self
@@ -127,41 +168,41 @@ final class E2EProjectHandle
             json: $paramsJson,
         );
 
-        $harness = $this->callHarnessPath();
-        $resolvedTarget = $export !== null ? "{$file}:{$export}" : $file;
-
-        $commandParts = [
-            'node',
-            escapeshellarg($harness),
-            escapeshellarg($file),
-        ];
-
-        if ($export !== null) {
-            $commandParts[] = escapeshellarg($export);
-        }
-
-        $command = implode(' ', $commandParts);
-
-        $commandDto = (new ProcessCommandDTO(
-            command: $command,
-            workingDirectory: $context->project->dir,
-            env: $context->env,
-        ))->withInjectedEnv([
-            'PEST_E2E_PROJECT' => $context->project->name,
-            'PEST_E2E_RUN_ID' => $context->runId,
-            'PEST_E2E_PARAMS' => $paramsJson,
-            'PEST_E2E_PARAMS_FILE' => $paramsFilePath,
-        ]);
-
-        $plan = new ProcessPlanDTO(
-            command: $commandDto,
-            options: $this->options ?? new ProcessOptionsDTO,
-            params: $paramsDto,
-            paramsJsonInline: $paramsJson,
-            paramsJsonFilePath: $paramsFilePath,
-        );
-
         try {
+            $harness = $this->callHarnessPath();
+            $resolvedTarget = $export !== null ? "{$file}:{$export}" : $file;
+
+            $commandParts = [
+                'node',
+                escapeshellarg($harness),
+                escapeshellarg($file),
+            ];
+
+            if ($export !== null) {
+                $commandParts[] = escapeshellarg($export);
+            }
+
+            $command = implode(' ', $commandParts);
+
+            $commandDto = (new ProcessCommandDTO(
+                command: $command,
+                workingDirectory: $context->project->dir,
+                env: $context->env,
+            ))->withInjectedEnv([
+                'PEST_E2E_PROJECT' => $context->project->name,
+                'PEST_E2E_RUN_ID' => $context->runId,
+                'PEST_E2E_PARAMS' => $paramsJson,
+                'PEST_E2E_PARAMS_FILE' => $paramsFilePath,
+            ]);
+
+            $plan = new ProcessPlanDTO(
+                command: $commandDto,
+                options: $this->options ?? new ProcessOptionsDTO,
+                params: $paramsDto,
+                paramsJsonInline: $paramsJson,
+                paramsJsonFilePath: $paramsFilePath,
+            );
+
             $result = (new ProcessRunner)->run($plan);
 
             if (! $result->isSuccessful()) {

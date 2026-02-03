@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E;
 
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
+use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\ProjectRegistry;
 use ValcuAndrei\PestE2E\Runners\E2ERunner;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
+use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 
@@ -24,10 +26,13 @@ final class E2E
 
     private RunIdGeneratorContract $runIdGenerator;
 
+    private AuthTicketIssuerContract $authTicketIssuer;
+
     private function __construct()
     {
         $this->registry = new ProjectRegistry;
         $this->runIdGenerator = new RandomRunIdGenerator;
+        $this->authTicketIssuer = new NullAuthTicketIssuer;
     }
 
     /**
@@ -52,6 +57,22 @@ final class E2E
     public function useRunIdGenerator(RunIdGeneratorContract $generator): void
     {
         $this->runIdGenerator = $generator;
+    }
+
+    /**
+     * Use an auth ticket issuer.
+     */
+    public function useAuthTicketIssuer(AuthTicketIssuerContract $issuer): void
+    {
+        $this->authTicketIssuer = $issuer;
+    }
+
+    /**
+     * Get the auth ticket issuer.
+     */
+    public function authTicketIssuer(): AuthTicketIssuerContract
+    {
+        return $this->authTicketIssuer;
     }
 
     /**
