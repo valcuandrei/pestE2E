@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use RuntimeException;
 use ValcuAndrei\PestE2E\E2E;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
@@ -91,7 +90,7 @@ it('surfaces a readable error when the export is missing', function () {
         );
 
         expect(fn () => e2e('frontend')->call($modulePath, 'nope'))
-            ->toThrow(RuntimeException::class, 'Export "nope" not found');
+            ->toThrow(\RuntimeException::class, 'Export "nope" not found');
     } finally {
         @unlink($modulePath);
         @unlink($reportPath);
