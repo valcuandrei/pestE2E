@@ -29,3 +29,29 @@ Injected into every Node process:
 - JS calls a testing-only login endpoint
 - Server validates ticket and authenticates browser
 - Ticket is single-use, short-lived, testing-only
+
+## Auth action contract
+
+The package provides a testing-only auth endpoint:
+
+POST `/.well-known/pest-e2e/auth/login`
+
+The endpoint validates E2E auth tickets and delegates
+authentication to an application-defined action.
+
+### Contract
+
+`E2EAuthActionContract`
+
+Responsibilities:
+- Receive a validated ticket payload
+- Authenticate the browser session or issue a token
+- Return an HTTP response
+
+The package binds a default implementation.
+Applications may rebind the contract to customize behavior.
+
+### Stability
+
+- The HTTP endpoint path and request shape are **v1 stable**
+- The internal action binding is explicitly extensible

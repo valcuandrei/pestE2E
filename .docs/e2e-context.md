@@ -5,10 +5,12 @@ Build a Pest plugin that runs JS E2E runners (Playwright/Jest/etc),
 ingests a JSON report, and fails Pest tests on JS failures.
 
 ## Architecture (locked)
-- No Laravel container
-- No service providers
+
+- Laravel-first backend
+- Package Service Provider (testing-only behavior)
+- Pest used as orchestrator
 - Explicit composition root
-- Pest-native bootstrap via `pest-plugin.php`
+- JS runner logic lives entirely outside PHP
 
 ## Core pieces implemented
 - ProjectRegistry
@@ -33,4 +35,10 @@ ingests a JSON report, and fails Pest tests on JS failures.
 1. Finalize single composition root (shared registry + runner factory)
 2. Wire E2EProjectHandle::run() to shared runner
 3. Add public API test for e2e() helper
-4. Leave import() and call() stubbed
+4. Leave import() stubbed (reserved for future versions)
+
+## Scope boundary
+
+- Backend framework: Laravel (explicit)
+- Frontend runners: replaceable (Playwright, Jest, etc.)
+- Browser logic never crosses into PHP

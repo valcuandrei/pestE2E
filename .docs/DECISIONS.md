@@ -6,11 +6,13 @@ Any change here is a breaking change.
 ---
 
 ## 0) Core philosophy
+
+- Laravel is the **authoritative backend**
+- Pest owns test orchestration and state
 - All browser tests are written in **JavaScript**
 - PHP never exposes browser actions
-- Pest is an **orchestrator**, not a test authoring API
-- JS runner logic is replaceable
-- Lock-in is explicitly avoided
+- JS runners are **replaceable adapters**
+- The system is a **contract bridge**, not a browser DSL
 
 ---
 
@@ -28,7 +30,7 @@ Any change here is a breaking change.
 - Public API must not expose Playwright concepts
 - Other JS runners may be used if they can:
   - be executed as a process
-  - emit machine-readable results (JUnit v1)
+  - emit machine-readable results (JSON `pest-e2e.v1`, adapters allowed)
 
 ---
 
@@ -68,11 +70,26 @@ Default debug strategy:
 Authentication is transferred using a **one-time E2E login ticket**.
 
 Flow:
-1. Pest creates a user via factories
-2. Pest issues a short-lived login ticket for that user
-3. Ticket is passed to JS via params
-4. JS calls a testing-only login endpoint
-5. App sets normal auth cookies
+1. Pest creates a Laravel user (factories, seeders, personas)
+2. Pest issues a short-lived, single-use auth ticket
+3. Ticket is passed to JS via `params.auth.ticket`
+4. JS calls a **testing-only auth endpoint** provided by the package
+5. The app authenticates the browser using:
+   - session cookies (default)
+   - or Sanctum tokens (optional)
+
+### Server-side responsibility
+
+The package provides the auth route, but delegates
+authentication behavior to a rebindable action:
+
+- `E2EAuthActionContract`
+
+Apps may rebind this action to customize:
+- guards
+- multi-tenancy
+- Sanctum abilities
+- token vs cookie behavior
 
 ---
 

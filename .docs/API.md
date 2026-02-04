@@ -31,5 +31,15 @@ e2e()->project('frontend', fn ($p) => $p
 - `import()` — import JS tests as Pest tests
 - `call(file, export?, params?)` — run standalone JS export
 
+> Note: `import()` is reserved for future versions and is not part of the v1 execution path.
+
 Shorthand:
 - `call('js/tasks/seed.ts:seedDatabase', [...])`
+
+### Authentication
+
+When using Laravel, tests may authenticate E2E runs via
+`actingAs()` or personas.
+
+Authentication state is transferred to JS using a
+one-time auth ticket and a testing-only login endpoint.
