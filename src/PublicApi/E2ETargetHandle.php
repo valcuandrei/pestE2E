@@ -18,7 +18,7 @@ use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 /**
  * Returned by e2e('frontend')
  */
-final class E2EProjectHandle
+final class E2ETargetHandle
 {
     /** @var array<string,string> */
     private array $env = [];
@@ -29,7 +29,7 @@ final class E2EProjectHandle
     private ?ProcessOptionsDTO $options = null;
 
     public function __construct(
-        private readonly string $project,
+        private readonly string $target,
     ) {}
 
     /**
@@ -118,7 +118,7 @@ final class E2EProjectHandle
         $runner = CompositionRoot::instance()->runner();
 
         $runner->run(
-            projectName: $this->project,
+            targetName: $this->target,
             env: $this->env,
             params: $this->params,
             options: $this->options,
@@ -145,17 +145,17 @@ final class E2EProjectHandle
     public function call(string $target, ?string $export = null, array $params = []): void
     {
         $root = CompositionRoot::instance();
-        $project = $root->registry()->get($this->project);
+        $targetConfig = $root->registry()->get($this->target);
         $runId = $root->generateRunId();
 
         /** @var array<string, mixed> */
         $mergedParams = array_replace_recursive($this->params, $params);
-        $context = RunContextDTO::make($project, $runId, $this->env, $mergedParams);
+        $context = RunContextDTO::make($targetConfig, $runId, $this->env, $mergedParams);
 
         [$file, $export] = $this->resolveCallTarget($target, $export);
 
         $paramsDto = new ParamsDTO(
-            project: $context->project->name,
+            target: $context->target->name,
             runId: $context->runId,
             params: $context->params,
         );
@@ -163,7 +163,7 @@ final class E2EProjectHandle
         $paramsJson = $this->encodeJson($paramsDto);
 
         $paramsFilePath = (new TempParamsFileWriter)->write(
-            project: $context->project->name,
+            target: $context->target->name,
             runId: $context->runId,
             json: $paramsJson,
         );
@@ -186,10 +186,10 @@ final class E2EProjectHandle
 
             $commandDto = (new ProcessCommandDTO(
                 command: $command,
-                workingDirectory: $context->project->dir,
+                workingDirectory: $context->target->dir,
                 env: $context->env,
             ))->withInjectedEnv([
-                'PEST_E2E_PROJECT' => $context->project->name,
+                'PEST_E2E_TARGET' => $context->target->name,
                 'PEST_E2E_RUN_ID' => $context->runId,
                 'PEST_E2E_PARAMS' => $paramsJson,
                 'PEST_E2E_PARAMS_FILE' => $paramsFilePath,
@@ -210,7 +210,7 @@ final class E2EProjectHandle
                     "E2E call failed (exit {$result->exitCode}).\n\n".
                         "TARGET:\n{$resolvedTarget}\n\n".
                         "CMD:\n{$command}\n\n".
-                        "CWD:\n{$context->project->dir}\n\n".
+                        "CWD:\n{$context->target->dir}\n\n".
                         "STDOUT:\n{$result->stdout}\n\n".
                         "STDERR:\n{$result->stderr}"
                 );

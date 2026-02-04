@@ -36,7 +36,7 @@ JS;
     file_put_contents($modulePath, $moduleContents);
 
     try {
-        e2e()->project('frontend', fn ($p) => $p
+        e2e()->target('frontend', fn ($p) => $p
             ->dir(dirname($modulePath))
             ->runner('node')
             ->command('php -r "exit(0);"')

@@ -95,7 +95,7 @@ Apps may rebind this action to customize:
 
 ## 7) Env and params contract
 When spawning Node, the plugin injects:
-- `PEST_E2E_PROJECT`
+- `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON) OR `PEST_E2E_PARAMS_FILE`
 
@@ -106,7 +106,7 @@ When spawning Node, the plugin injects:
 - The v1 reporting format is **JSON**
 - JS runners must emit a JSON report matching the `pest-e2e.v1` schema
 - The report must include:
-  - project
+  - target
   - runId
   - stats
   - test list with pass/fail + optional error info

@@ -13,7 +13,7 @@ ingests a JSON report, and fails Pest tests on JS failures.
 - JS runner logic lives entirely outside PHP
 
 ## Core pieces implemented
-- ProjectRegistry
+- TargetRegistry
 - ProcessRunner (Symfony Process::fromShellCommandline)
 - E2ERunner
   - Injected RunIdGeneratorContract
@@ -24,7 +24,7 @@ ingests a JSON report, and fails Pest tests on JS failures.
 
 ## Public API direction
 - Global helper: e2e()
-- e2e()->project('frontend', fn($p) => ...)
+- e2e()->target('frontend', fn($p) => ...)
 - e2e('frontend')->withEnv()->withParams()->run()
 
 ## Bootstrap
@@ -33,12 +33,12 @@ ingests a JSON report, and fails Pest tests on JS failures.
 
 ## Next tasks
 1. Finalize single composition root (shared registry + runner factory)
-2. Wire E2EProjectHandle::run() to shared runner
+2. Wire E2ETargetHandle::run() to shared runner
 3. Add public API test for e2e() helper
 4. Leave import() stubbed (reserved for future versions)
 
 ## Scope boundary
 
-- Backend framework: Laravel (explicit)
+- Backend app: Laravel (explicit)
 - Frontend runners: replaceable (Playwright, Jest, etc.)
 - Browser logic never crosses into PHP

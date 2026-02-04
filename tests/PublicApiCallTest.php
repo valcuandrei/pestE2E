@@ -25,15 +25,15 @@ it('calls a module export via the node harness', function () {
     rename($moduleFile, $modulePath);
 
     $moduleContents = <<<'JS'
-export async function check({ project, runId, params, env }) {
-  if (project !== 'frontend') throw new Error('bad project');
+export async function check({ target, runId, params, env }) {
+  if (target !== 'frontend') throw new Error('bad target');
   if (runId !== 'run-123') throw new Error('bad run');
-  if (params.fromProject !== 'yes') throw new Error('bad params project');
+  if (params.fromTarget !== 'yes') throw new Error('bad params target');
   if (params.fromHandle !== 'yes') throw new Error('bad params handle');
   if (params.fromCall !== 'yes') throw new Error('bad params call');
-  if (env.PEST_E2E_PROJECT !== 'frontend') throw new Error('missing env project');
+  if (env.PEST_E2E_TARGET !== 'frontend') throw new Error('missing env target');
   if (env.PEST_E2E_RUN_ID !== 'run-123') throw new Error('missing env run');
-  if (env.FROM_PROJECT !== '1') throw new Error('missing env project flag');
+  if (env.FROM_TARGET !== '1') throw new Error('missing env target flag');
   if (env.FROM_HANDLE !== '1') throw new Error('missing env handle flag');
 }
 JS;
@@ -41,13 +41,13 @@ JS;
     file_put_contents($modulePath, $moduleContents);
 
     try {
-        e2e()->project('frontend', fn ($p) => $p
+        e2e()->target('frontend', fn ($p) => $p
             ->dir(dirname($modulePath))
             ->runner('node')
             ->command('php -r "exit(0);"')
             ->report('json', $reportPath)
-            ->env(['FROM_PROJECT' => '1'])
-            ->params(['fromProject' => 'yes'])
+            ->env(['FROM_TARGET' => '1'])
+            ->params(['fromTarget' => 'yes'])
         );
 
         e2e('frontend')
@@ -82,7 +82,7 @@ it('surfaces a readable error when the export is missing', function () {
     file_put_contents($modulePath, "export async function ok() { return; }\n");
 
     try {
-        e2e()->project('frontend', fn ($p) => $p
+        e2e()->target('frontend', fn ($p) => $p
             ->dir(dirname($modulePath))
             ->runner('node')
             ->command('php -r "exit(0);"')

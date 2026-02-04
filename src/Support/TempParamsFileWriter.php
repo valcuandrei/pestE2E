@@ -22,10 +22,10 @@ final class TempParamsFileWriter implements ParamsFileWriterContract
     /**
      * Persist the params JSON and return an absolute file path.
      */
-    public function write(string $project, string $runId, string $json): string
+    public function write(string $target, string $runId, string $json): string
     {
         $base = $this->baseDir ?? sys_get_temp_dir();
-        $dir = rtrim($base, '/').'/pest-e2e/'.$this->sanitize($project);
+        $dir = rtrim($base, '/').'/pest-e2e/'.$this->sanitize($target);
 
         if (! is_dir($dir) && ! @mkdir($dir, 0777, true) && ! is_dir($dir)) {
             throw new RuntimeException("Unable to create params dir: {$dir}");
@@ -41,10 +41,10 @@ final class TempParamsFileWriter implements ParamsFileWriterContract
     }
 
     /**
-     * Sanitize the project name.
+     * Sanitize the target name.
      */
     private function sanitize(string $value): string
     {
-        return preg_replace('/[^a-zA-Z0-9._-]+/', '-', $value) ?? 'project';
+        return preg_replace('/[^a-zA-Z0-9._-]+/', '-', $value) ?? 'target';
     }
 }

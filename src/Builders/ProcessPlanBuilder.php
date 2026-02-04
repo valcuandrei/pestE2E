@@ -46,13 +46,13 @@ final readonly class ProcessPlanBuilder
         $options ??= new ProcessOptionsDTO;
 
         $commandDto = new ProcessCommandDTO(
-            command: $context->project->command,
-            workingDirectory: $context->project->dir,
+            command: $context->target->command,
+            workingDirectory: $context->target->dir,
             env: $context->env,
         );
 
         $commandDto = $commandDto->withInjectedEnv([
-            'PEST_E2E_PROJECT' => $context->project->name,
+            'PEST_E2E_TARGET' => $context->target->name,
             'PEST_E2E_RUN_ID' => $context->runId,
         ]);
 
@@ -66,7 +66,7 @@ final readonly class ProcessPlanBuilder
         }
 
         $paramsDto = new ParamsDTO(
-            project: $context->project->name,
+            target: $context->target->name,
             runId: $context->runId,
             params: $context->params,
         );
@@ -85,7 +85,7 @@ final readonly class ProcessPlanBuilder
             )->withParamsJsonInline($json);
         }
 
-        $filePath = $this->paramsFileWriter->write($paramsDto->project, $paramsDto->runId, $json);
+        $filePath = $this->paramsFileWriter->write($paramsDto->target, $paramsDto->runId, $json);
 
         $commandDto = $plan->command->withInjectedEnv([
             'PEST_E2E_PARAMS_FILE' => $filePath,

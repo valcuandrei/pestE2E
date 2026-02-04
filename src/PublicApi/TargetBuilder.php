@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\PublicApi;
 
 use RuntimeException;
-use ValcuAndrei\PestE2E\DTO\ProjectConfigDTO;
+use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 
 /**
- * Builder passed to e2e()->project('name', fn($p) => ...)
+ * Builder passed to e2e()->target('name', fn($p) => ...)
  */
-final class ProjectBuilder
+final class TargetBuilder
 {
     private ?string $dir = null;
 
@@ -78,22 +78,22 @@ final class ProjectBuilder
         return $this;
     }
 
-    public function toProjectConfig(): ProjectConfigDTO
+    public function toTargetConfig(): TargetConfigDTO
     {
         if ($this->dir === null) {
-            throw new RuntimeException("E2E project '{$this->name}' is missing dir().");
+            throw new RuntimeException("E2E target '{$this->name}' is missing dir().");
         }
 
         if ($this->command === null) {
-            throw new RuntimeException("E2E project '{$this->name}' is missing command().");
+            throw new RuntimeException("E2E target '{$this->name}' is missing command().");
         }
 
         if ($this->reportType === null || $this->reportPath === null) {
-            throw new RuntimeException("E2E project '{$this->name}' is missing report(type, path).");
+            throw new RuntimeException("E2E target '{$this->name}' is missing report(type, path).");
         }
 
         // Adjust ctor args to your real DTO signature if needed.
-        return new ProjectConfigDTO(
+        return new TargetConfigDTO(
             name: $this->name,
             dir: $this->dir,
             runner: $this->runner ?? 'unknown',

@@ -12,5 +12,5 @@ interface ParamsFileWriterContract
     /**
      * Persist the params JSON and return an absolute file path.
      */
-    public function write(string $project, string $runId, string $json): string;
+    public function write(string $target, string $runId, string $json): string;
 }

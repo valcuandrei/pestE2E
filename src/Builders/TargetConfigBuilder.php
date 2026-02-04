@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Builders;
 
-use ValcuAndrei\PestE2E\DTO\ProjectConfigDTO;
+use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 
 /**
  * @internal
  */
-final class ProjectConfigBuilder
+final class TargetConfigBuilder
 {
     private string $dir = '.';
 
@@ -28,12 +28,12 @@ final class ProjectConfigBuilder
     private array $params = [];
 
     /**
-     * Create a new ProjectConfigBuilder instance.
+     * Create a new TargetConfigBuilder instance.
      */
     public function __construct(private readonly string $name) {}
 
     /**
-     * Set the directory of the project.
+     * Set the directory of the target.
      *
      *
      * @return $this
@@ -46,7 +46,7 @@ final class ProjectConfigBuilder
     }
 
     /**
-     * Set the runner of the project.
+     * Set the runner of the target.
      *
      *
      * @return $this
@@ -59,7 +59,7 @@ final class ProjectConfigBuilder
     }
 
     /**
-     * Set the command of the project.
+     * Set the command of the target.
      *
      *
      * @return $this
@@ -72,7 +72,7 @@ final class ProjectConfigBuilder
     }
 
     /**
-     * Set the report of the project.
+     * Set the report of the target.
      *
      *
      * @return $this
@@ -86,7 +86,7 @@ final class ProjectConfigBuilder
     }
 
     /**
-     * Set the environment variables of the project.
+     * Set the environment variables of the target.
      *
      * @param  array<string, string>  $env
      * @param  array<string,string>  $env
@@ -100,7 +100,7 @@ final class ProjectConfigBuilder
     }
 
     /**
-     * Set the parameters of the project.
+     * Set the parameters of the target.
      *
      * @param  array<string,mixed>  $params
      * @return $this
@@ -115,11 +115,11 @@ final class ProjectConfigBuilder
     }
 
     /**
-     * Convert the project config to a DTO.
+     * Convert the target config to a DTO.
      */
-    public function toDTO(): ProjectConfigDTO
+    public function toDTO(): TargetConfigDTO
     {
-        return new ProjectConfigDTO(
+        return new TargetConfigDTO(
             name: $this->name,
             dir: $this->dir,
             runner: $this->runner,

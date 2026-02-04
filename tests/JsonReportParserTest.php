@@ -11,7 +11,7 @@ it('parses a valid report file', function () {
     $report = $parser->parseFile(__DIR__.'/Fixtures/report.valid.json');
 
     expect($report->schema)->toBe(JsonReportParser::SCHEMA_V1)
-        ->and($report->project)->toBe('frontend')
+        ->and($report->target)->toBe('frontend')
         ->and($report->runId)->toBe('run-123')
         ->and($report->stats->passed)->toBe(1)
         ->and($report->stats->failed)->toBe(1)

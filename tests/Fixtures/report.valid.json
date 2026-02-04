@@ -1,6 +1,6 @@
 {
     "schema": "pest-e2e.v1",
-    "project": "frontend",
+  "target": "frontend",
     "runId": "run-123",
     "stats": {
         "passed": 1,

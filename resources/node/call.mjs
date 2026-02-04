@@ -35,7 +35,7 @@ import { pathToFileURL } from 'node:url';
         : rawParams;
 
     const context = {
-      project: process.env.PEST_E2E_PROJECT ?? rawParams?.project ?? '',
+      target: process.env.PEST_E2E_TARGET ?? rawParams?.target ?? '',
       runId: process.env.PEST_E2E_RUN_ID ?? rawParams?.runId ?? '',
       params: params ?? {},
       env: process.env,

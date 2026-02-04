@@ -10,14 +10,14 @@ it('throws a readable exception when the json report contains failures', functio
     E2E::reset();
     E2E::instance()->useRunIdGenerator(new FixedRunIdGenerator('run-123'));
 
-    $projectName = 'frontend';
+    $targetName = 'frontend';
     $runId = 'run-123';
     $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     expect($reportPath)->not->toBeFalse();
 
     $reportJson = json_encode([
         'schema' => JsonReportParser::SCHEMA_V1,
-        'project' => $projectName,
+        'target' => $targetName,
         'runId' => $runId,
         'stats' => [
             'passed' => 0,
@@ -42,8 +42,8 @@ it('throws a readable exception when the json report contains failures', functio
         .'));"';
 
     try {
-        e2e()->project(
-            $projectName,
+        e2e()->target(
+            $targetName,
             fn ($p) => $p
                 ->dir(getcwd())
                 ->runner('Playwright')
@@ -51,9 +51,9 @@ it('throws a readable exception when the json report contains failures', functio
                 ->report('json', $reportPath)
         );
 
-        expect(fn () => e2e($projectName)->run())
+        expect(fn () => e2e($targetName)->run())
             ->toThrow(RuntimeException::class, 'E2E failures')
-            ->and(fn () => e2e($projectName)->run())
+            ->and(fn () => e2e($targetName)->run())
             ->toThrow(RuntimeException::class, 'it fails');
     } finally {
         @unlink($reportPath);

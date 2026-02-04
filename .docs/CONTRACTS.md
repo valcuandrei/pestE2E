@@ -2,7 +2,7 @@
 
 ## Env injection
 Injected into every Node process:
-- `PEST_E2E_PROJECT`
+- `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON)
 - `PEST_E2E_PARAMS_FILE` (absolute path)
@@ -11,7 +11,7 @@ Injected into every Node process:
 
 - JS suite must emit a **JSON report**
 - The report must conform to the `pest-e2e.v1` schema
-- File path must match project config
+- File path must match target config
 
 ## call() contract
 - Node harness loads module + export
@@ -19,7 +19,7 @@ Injected into every Node process:
   - params
   - env
   - runId
-  - project
+  - target
 - resolve → exit code 0
 - throw/reject → non-zero exit
 - stdout/stderr captured and surfaced

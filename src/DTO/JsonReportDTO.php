@@ -14,7 +14,7 @@ final readonly class JsonReportDTO
      */
     public function __construct(
         public string $schema,
-        public string $project,
+        public string $target,
         public string $runId,
         public JsonReportStatsDTO $stats,
         public array $tests = [],

@@ -10,7 +10,7 @@ use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
-use ValcuAndrei\PestE2E\Registries\ProjectRegistry;
+use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 
 /**
  * @internal
@@ -21,7 +21,7 @@ final readonly class E2ERunner
      * Create a new E2ERunner instance.
      */
     public function __construct(
-        private ProjectRegistry $registry,
+        private TargetRegistry $registry,
         private ProcessPlanBuilder $planBuilder,
         private ProcessRunner $processRunner,
         private JsonReportReader $reportReader,
@@ -35,11 +35,11 @@ final readonly class E2ERunner
      * @param  array<string,mixed>  $params
      * @param  ProcessOptionsDTO|null  $options  (optional) process options
      */
-    public function run(string $projectName, array $env = [], array $params = [], ?ProcessOptionsDTO $options = null): void
+    public function run(string $targetName, array $env = [], array $params = [], ?ProcessOptionsDTO $options = null): void
     {
-        $project = $this->registry->get($projectName);
+        $target = $this->registry->get($targetName);
         $runId = $this->runIdGenerator->generate();
-        $context = RunContextDTO::make($project, $runId, $env, $params);
+        $context = RunContextDTO::make($target, $runId, $env, $params);
         $plan = $this->planBuilder->build($context, $options);
         $result = $this->processRunner->run($plan);
 
@@ -64,7 +64,7 @@ final readonly class E2ERunner
                 }
             }
 
-            throw new RuntimeException("E2E failures for {$projectName} ({$runId}):\n".implode("\n", $lines));
+            throw new RuntimeException("E2E failures for {$targetName} ({$runId}):\n".implode("\n", $lines));
         }
     }
 }

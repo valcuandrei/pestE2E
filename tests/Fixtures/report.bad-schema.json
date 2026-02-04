@@ -1,6 +1,6 @@
 {
     "schema": "some-other-schema",
-    "project": "frontend",
+    "target": "frontend",
     "runId": "run-123",
     "stats": {
         "passed": 0,

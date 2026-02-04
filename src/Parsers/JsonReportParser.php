@@ -63,7 +63,7 @@ final class JsonReportParser
             throw new JsonReportParserException("Unsupported JSON report schema ({$source}): {$schema}");
         }
 
-        $project = $this->requireString($data, 'project', $source);
+        $target = $this->requireString($data, 'target', $source);
         $runId = $this->requireString($data, 'runId', $source);
 
         /** @var array<string, mixed> $statsRaw */
@@ -97,7 +97,7 @@ final class JsonReportParser
 
         return new JsonReportDTO(
             schema: $schema,
-            project: $project,
+            target: $target,
             runId: $runId,
             stats: $stats,
             tests: $tests,

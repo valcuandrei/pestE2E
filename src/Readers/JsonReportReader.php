@@ -26,12 +26,12 @@ final readonly class JsonReportReader
      */
     public function readForRun(RunContextDTO $context): JsonReportDTO
     {
-        $path = $context->project->reportPath;
+        $path = $context->target->reportPath;
         $report = $this->parser->parseFile($path);
 
-        if ($report->project !== $context->project->name) {
+        if ($report->target !== $context->target->name) {
             throw new JsonReportParserException(
-                "JSON report project mismatch: expected {$context->project->name}, got {$report->project}"
+                "JSON report target mismatch: expected {$context->target->name}, got {$report->target}"
             );
         }
 

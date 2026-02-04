@@ -8,7 +8,7 @@ use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 
 final class FakeParamsFileWriter implements ParamsFileWriterContract
 {
-    public ?string $lastProject = null;
+    public ?string $lastTarget = null;
 
     public ?string $lastRunId = null;
 
@@ -18,9 +18,9 @@ final class FakeParamsFileWriter implements ParamsFileWriterContract
         private readonly string $returnPath = '/tmp/pest-e2e/fake.json',
     ) {}
 
-    public function write(string $project, string $runId, string $json): string
+    public function write(string $target, string $runId, string $json): string
     {
-        $this->lastProject = $project;
+        $this->lastTarget = $target;
         $this->lastRunId = $runId;
         $this->lastJson = $json;
 

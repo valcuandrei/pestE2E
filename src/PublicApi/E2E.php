@@ -33,22 +33,22 @@ final class E2E
     }
 
     /**
-     * Register a project.
+     * Register a target.
      */
-    public function project(string $name, Closure $configure): void
+    public function target(string $name, Closure $configure): void
     {
-        $builder = new ProjectBuilder($name);
+        $builder = new TargetBuilder($name);
 
         $configure($builder);
 
-        $this->root->registry()->put($builder->toProjectConfig());
+        $this->root->registry()->put($builder->toTargetConfig());
     }
 
     /**
-     * Get a project handle.
+     * Get a target handle.
      */
-    public function projectHandle(string $name): E2EProjectHandle
+    public function targetHandle(string $name): E2ETargetHandle
     {
-        return new E2EProjectHandle($name);
+        return new E2ETargetHandle($name);
     }
 }

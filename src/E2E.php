@@ -8,7 +8,7 @@ use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
-use ValcuAndrei\PestE2E\Registries\ProjectRegistry;
+use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Runners\E2ERunner;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
 use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
@@ -22,7 +22,7 @@ final class E2E
 {
     private static ?self $instance = null;
 
-    private readonly ProjectRegistry $registry;
+    private readonly TargetRegistry $registry;
 
     private RunIdGeneratorContract $runIdGenerator;
 
@@ -30,7 +30,7 @@ final class E2E
 
     private function __construct()
     {
-        $this->registry = new ProjectRegistry;
+        $this->registry = new TargetRegistry;
         $this->runIdGenerator = new RandomRunIdGenerator;
         $this->authTicketIssuer = new NullAuthTicketIssuer;
     }
@@ -86,7 +86,7 @@ final class E2E
     /**
      * Get the registry.
      */
-    public function registry(): ProjectRegistry
+    public function registry(): TargetRegistry
     {
         return $this->registry;
     }

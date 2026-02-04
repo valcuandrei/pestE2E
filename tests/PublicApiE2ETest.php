@@ -10,12 +10,12 @@ it('runs via the public e2e helper using the shared composition root', function 
     E2E::reset();
     E2E::instance()->useRunIdGenerator(new FixedRunIdGenerator('run-123'));
 
-    $projectName = 'frontend';
+    $targetName = 'frontend';
     $runId = 'run-123';
     $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $reportJson = json_encode([
         'schema' => JsonReportParser::SCHEMA_V1,
-        'project' => $projectName,
+        'target' => $targetName,
         'runId' => $runId,
         'stats' => [
             'passed' => 1,
@@ -39,18 +39,18 @@ it('runs via the public e2e helper using the shared composition root', function 
     expect($reportPath)->not->toBeFalse();
 
     try {
-        e2e()->project($projectName, fn ($p) => $p
+        e2e()->target($targetName, fn ($p) => $p
             ->dir(getcwd())
             ->runner('Playwright')
             ->command($command)
             ->report('json', $reportPath)
         );
 
-        e2e($projectName)->run();
+        e2e($targetName)->run();
 
         $data = json_decode(file_get_contents($reportPath), true, 512, JSON_THROW_ON_ERROR);
 
-        expect($data['project'])->toBe($projectName)
+        expect($data['target'])->toBe($targetName)
             ->and($data['runId'])->toBe($runId);
     } finally {
         @unlink($reportPath);

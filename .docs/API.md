@@ -4,11 +4,11 @@ Anything here is stable once implemented.
 
 ## Entry point
 - `e2e()`
-- `e2e('project')`
+- `e2e('target')`
 
-## Project definition
+## Target definition
 ```php
-e2e()->project('frontend', fn ($p) => $p
+e2e()->target('frontend', fn ($p) => $p
     ->dir('js')
     ->runner('playwright') // informational only
     ->command('npx playwright test') // executed in the same environment as Pest

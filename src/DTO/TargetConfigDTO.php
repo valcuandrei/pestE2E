@@ -7,7 +7,7 @@ namespace ValcuAndrei\PestE2E\DTO;
 /**
  * @internal
  */
-final readonly class ProjectConfigDTO
+final readonly class TargetConfigDTO
 {
     /**
      * @param  array<string, string>  $env  (optional) environment variables

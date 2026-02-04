@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
-use ValcuAndrei\PestE2E\DTO\ProjectConfigDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
+use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 use ValcuAndrei\PestE2E\Tests\Fakes\FakeParamsFileWriter;
 
-it('injects project and run id even when there are no params', function () {
+it('injects target and run id even when there are no params', function () {
     $writer = new FakeParamsFileWriter;
     $builder = new ProcessPlanBuilder($writer);
 
-    $project = new ProjectConfigDTO(
+    $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
         runner: 'Playwright',
@@ -22,13 +22,13 @@ it('injects project and run id even when there are no params', function () {
         params: [],
     );
 
-    $ctx = RunContextDTO::make($project, 'run-123');
+    $ctx = RunContextDTO::make($target, 'run-123');
 
     $plan = $builder->build($ctx);
 
     $env = $plan->command->getMergedEnv();
 
-    expect($env['PEST_E2E_PROJECT'])->toBe('frontend')
+    expect($env['PEST_E2E_TARGET'])->toBe('frontend')
         ->and($env['PEST_E2E_RUN_ID'])->toBe('run-123')
         ->and(isset($env['PEST_E2E_PARAMS']))->toBeFalse()
         ->and(isset($env['PEST_E2E_PARAMS_FILE']))->toBeFalse()
@@ -39,7 +39,7 @@ it('uses inline params when JSON is small enough', function () {
     $writer = new FakeParamsFileWriter;
     $builder = (new ProcessPlanBuilder($writer))->withMaxInlineBytes(10_000);
 
-    $project = new ProjectConfigDTO(
+    $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
         runner: 'Playwright',
@@ -50,7 +50,7 @@ it('uses inline params when JSON is small enough', function () {
         params: ['baseUrl' => 'http://localhost'],
     );
 
-    $ctx = RunContextDTO::make($project, 'run-abc');
+    $ctx = RunContextDTO::make($target, 'run-abc');
 
     $plan = $builder->build($ctx);
 
@@ -67,7 +67,7 @@ it('uses params file when JSON is too large', function () {
     $writer = new FakeParamsFileWriter('/abs/path/params.json');
     $builder = (new ProcessPlanBuilder($writer))->withMaxInlineBytes(10); // force file mode
 
-    $project = new ProjectConfigDTO(
+    $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
         runner: 'Playwright',
@@ -78,7 +78,7 @@ it('uses params file when JSON is too large', function () {
         params: ['baseUrl' => 'http://localhost', 'auth' => ['ticket' => str_repeat('x', 100)]],
     );
 
-    $ctx = RunContextDTO::make($project, 'run-big');
+    $ctx = RunContextDTO::make($target, 'run-big');
 
     $plan = $builder->build($ctx);
 
@@ -88,7 +88,7 @@ it('uses params file when JSON is too large', function () {
         ->and($plan->usesParamsFile())->toBeTrue()
         ->and($env['PEST_E2E_PARAMS_FILE'])->toBe('/abs/path/params.json')
         ->and(isset($env['PEST_E2E_PARAMS']))->toBeFalse()
-        ->and($writer->lastProject)->toBe('frontend')
+        ->and($writer->lastTarget)->toBe('frontend')
         ->and($writer->lastRunId)->toBe('run-big')
         ->and($writer->lastJson)->toBeString();
 });

@@ -13,7 +13,7 @@ final readonly class ParamsDTO
      * @param  array<string, mixed>  $params
      */
     public function __construct(
-        public string $project,
+        public string $target,
         public string $runId,
         public array $params,
     ) {}
@@ -21,12 +21,12 @@ final readonly class ParamsDTO
     /**
      * Convert the params to an array.
      *
-     * @return array{project:string, runId:string, params:array<string,mixed>}
+     * @return array{target:string, runId:string, params:array<string,mixed>}
      */
     public function toArray(): array
     {
         return [
-            'project' => $this->project,
+            'target' => $this->target,
             'runId' => $this->runId,
             'params' => $this->params,
         ];

@@ -14,7 +14,7 @@ final readonly class RunContextDTO
      * @param  array<string, mixed>  $params
      */
     public function __construct(
-        public ProjectConfigDTO $project,
+        public TargetConfigDTO $target,
         public string $runId,
         public array $env,
         public array $params,
@@ -27,18 +27,18 @@ final readonly class RunContextDTO
      * @param  array<string, mixed>  $params
      */
     public static function make(
-        ProjectConfigDTO $project,
+        TargetConfigDTO $target,
         string $runId,
         array $env = [],
         array $params = [],
     ): self {
         /** @var array<string, mixed> */
-        $mergedParams = array_replace_recursive($project->params, $params);
+        $mergedParams = array_replace_recursive($target->params, $params);
 
         return new self(
-            project: $project,
+            target: $target,
             runId: $runId,
-            env: array_replace($project->env, $env),
+            env: array_replace($target->env, $env),
             params: $mergedParams,
         );
     }
@@ -51,7 +51,7 @@ final readonly class RunContextDTO
     public function withEnv(array $env): self
     {
         return new self(
-            project: $this->project,
+            target: $this->target,
             runId: $this->runId,
             env: array_replace($this->env, $env),
             params: $this->params,
@@ -69,7 +69,7 @@ final readonly class RunContextDTO
         $mergedParams = array_replace_recursive($this->params, $params);
 
         return new self(
-            project: $this->project,
+            target: $this->target,
             runId: $this->runId,
             env: $this->env,
             params: $mergedParams,
