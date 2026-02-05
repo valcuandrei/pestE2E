@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use ValcuAndrei\PestE2E\E2E;
+use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
 it('calls a module export via the node harness', function () {
@@ -12,8 +12,7 @@ it('calls a module export via the node harness', function () {
         $this->markTestSkipped('Node.js not available on PATH.');
     }
 
-    E2E::reset();
-    E2E::instance()->useRunIdGenerator(new FixedRunIdGenerator('run-123'));
+    app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator('run-123'));
 
     $moduleFile = tempnam(sys_get_temp_dir(), 'pest-e2e-call-');
     $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
@@ -67,8 +66,7 @@ it('surfaces a readable error when the export is missing', function () {
         $this->markTestSkipped('Node.js not available on PATH.');
     }
 
-    E2E::reset();
-    E2E::instance()->useRunIdGenerator(new FixedRunIdGenerator('run-123'));
+    app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator('run-123'));
 
     $moduleFile = tempnam(sys_get_temp_dir(), 'pest-e2e-call-');
     $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');

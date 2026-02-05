@@ -1,39 +1,48 @@
 {
     "name": "valcuandrei/pest-e2e",
-    "description": "A Pest plugin that lets you run JS-owned E2E and component tests from Pest without introducing a PHP browser DSL.",
+    "description": "A Laravel-first package that runs JS-owned E2E and component tests from Pest without introducing a PHP browser DSL.",
     "keywords": [
         "php",
-        "framework",
+        "laravel",
         "pest",
         "unit",
         "test",
         "testing",
-        "plugin"
+        "package"
     ],
     "license": "MIT",
     "require": {
         "php": "^8.4",
-        "pestphp/pest": "^4.3.1",
-        "pestphp/pest-plugin": "^4.0.0",
-        "symfony/process": "^8.0"
+        "illuminate/support": "^12.50",
+        "symfony/process": "^7.2"
     },
     "autoload": {
         "psr-4": {
             "ValcuAndrei\\PestE2E\\": "src/"
         },
         "files": [
-            "src/Autoload.php",
             "pest-plugin.php"
         ]
     },
-    "require-dev": {
-        "pestphp/pest-dev-tools": "^4.0.0"
+    "autoload-dev": {
+        "psr-4": {
+            "ValcuAndrei\\PestE2E\\Tests\\": "tests/"
+        }
     },
-    "minimum-stability": "dev",
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^4.3.1",
+        "pestphp/pest-dev-tools": "^4.0.0",
+        "pestphp/pest-plugin": "^4.0.0"
+    },
+    "minimum-stability": "stable",
     "prefer-stable": true,
     "config": {
         "sort-packages": true,
         "preferred-install": "dist",
+        "audit": {
+            "block-insecure": false
+        },
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
@@ -43,7 +52,7 @@
         "lint": "pint",
         "test:refacto": "rector --dry-run",
         "test:lint": "pint --test",
-        "test:types": "phpstan analyse --ansi",
+        "test:types": "phpstan analyse --ansi --debug",
         "test:unit": "pest --colors=always",
         "test": [
             "@test:refacto",
@@ -51,5 +60,12 @@
             "@test:types",
             "@test:unit"
         ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ValcuAndrei\\PestE2E\\PestE2EServiceProvider"
+            ]
+        }
     }
 }

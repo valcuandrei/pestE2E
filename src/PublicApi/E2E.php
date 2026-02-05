@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\PublicApi;
 
 use Closure;
+use Illuminate\Contracts\Container\Container;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 
 /**
@@ -12,32 +13,17 @@ use ValcuAndrei\PestE2E\E2E as CompositionRoot;
  */
 final class E2E
 {
-    private static ?self $instance = null;
-
-    private function __construct(
+    public function __construct(
         private readonly CompositionRoot $root,
+        private readonly Container $container,
     ) {}
-
-    /**
-     * Get the instance of the E2E class (singleton).
-     */
-    public static function instance(): self
-    {
-        $root = CompositionRoot::instance();
-
-        if (! self::$instance instanceof \ValcuAndrei\PestE2E\PublicApi\E2E || self::$instance->root !== $root) {
-            self::$instance = new self($root);
-        }
-
-        return self::$instance;
-    }
 
     /**
      * Register a target.
      */
     public function target(string $name, Closure $configure): void
     {
-        $builder = new TargetBuilder($name);
+        $builder = $this->container->make(TargetBuilder::class, ['name' => $name]);
 
         $configure($builder);
 
@@ -49,6 +35,6 @@ final class E2E
      */
     public function targetHandle(string $name): E2ETargetHandle
     {
-        return new E2ETargetHandle($name);
+        return $this->container->make(E2ETargetHandle::class, ['target' => $name]);
     }
 }

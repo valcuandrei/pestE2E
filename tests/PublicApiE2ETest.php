@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-use ValcuAndrei\PestE2E\E2E;
+use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
-it('runs via the public e2e helper using the shared composition root', function () {
-    E2E::reset();
-    E2E::instance()->useRunIdGenerator(new FixedRunIdGenerator('run-123'));
+it('runs via the public e2e helper using container bindings', function () {
+    app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator('run-123'));
 
     $targetName = 'frontend';
     $runId = 'run-123';

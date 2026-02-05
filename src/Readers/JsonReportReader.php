@@ -15,10 +15,10 @@ use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
 final readonly class JsonReportReader
 {
     /**
-     * @param  JsonReportParser  $parser  (optional) parser
+     * @param  JsonReportParser  $parser  parser
      */
     public function __construct(
-        private JsonReportParser $parser = new JsonReportParser,
+        private JsonReportParser $parser,
     ) {}
 
     /**

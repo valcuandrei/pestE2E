@@ -35,7 +35,7 @@ it('reads and validates report for run', function () {
 
     $ctx = RunContextDTO::make($target, 'run-123');
 
-    $reader = new JsonReportReader;
+    $reader = app(JsonReportReader::class);
     $report = $reader->readForRun($ctx);
 
     expect($report->target)->toBe('frontend')
@@ -61,7 +61,7 @@ it('throws when report target mismatches', function () {
 
     $ctx = RunContextDTO::make($target, 'run-123');
 
-    $reader = new JsonReportReader;
+    $reader = app(JsonReportReader::class);
 
     expect(fn () => $reader->readForRun($ctx))
         ->toThrow(JsonReportParserException::class, 'target mismatch');
@@ -86,7 +86,7 @@ it('throws when report runId mismatches', function () {
 
     $ctx = RunContextDTO::make($target, 'run-123');
 
-    $reader = new JsonReportReader;
+    $reader = app(JsonReportReader::class);
 
     expect(fn () => $reader->readForRun($ctx))
         ->toThrow(JsonReportParserException::class, 'runId mismatch');

@@ -11,7 +11,7 @@ if (! function_exists('e2e')) {
      */
     function e2e(?string $target = null)
     {
-        $api = E2E::instance();
+        $api = app(E2E::class);
 
         return $target === null
             ? $api

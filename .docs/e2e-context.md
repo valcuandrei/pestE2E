@@ -1,7 +1,7 @@
-# Pest E2E plugin – current state
+# Pest E2E package – current state
 
 ## Goal
-Build a Pest plugin that runs JS E2E runners (Playwright/Jest/etc),
+Build a Laravel package that runs JS E2E runners (Playwright/Jest/etc),
 ingests a JSON report, and fails Pest tests on JS failures.
 
 ## Architecture (locked)
@@ -9,7 +9,7 @@ ingests a JSON report, and fails Pest tests on JS failures.
 - Laravel-first backend
 - Package Service Provider (testing-only behavior)
 - Pest used as orchestrator
-- Explicit composition root
+- Container-managed composition root
 - JS runner logic lives entirely outside PHP
 
 ## Core pieces implemented
@@ -28,14 +28,13 @@ ingests a JSON report, and fails Pest tests on JS failures.
 - e2e('frontend')->withEnv()->withParams()->run()
 
 ## Bootstrap
-- pest-plugin.php defines the `e2e()` function
-- No usage of src/Plugin.php yet (kept for future Pest contracts)
+- PestE2EServiceProvider registers bindings and testing routes
+- pest-plugin.php defines the `e2e()` helper
 
 ## Next tasks
-1. Finalize single composition root (shared registry + runner factory)
-2. Wire E2ETargetHandle::run() to shared runner
-3. Add public API test for e2e() helper
-4. Leave import() stubbed (reserved for future versions)
+1. Add package docs for Laravel installation and config
+2. Expand auth route validation and payload support
+3. Leave import() stubbed (reserved for future versions)
 
 ## Scope boundary
 

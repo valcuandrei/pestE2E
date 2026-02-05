@@ -6,6 +6,7 @@ namespace ValcuAndrei\PestE2E\PublicApi;
 
 use JsonException;
 use RuntimeException;
+use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\ParamsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessCommandDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
@@ -13,7 +14,6 @@ use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
-use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 
 /**
  * Returned by e2e('frontend')
@@ -30,6 +30,9 @@ final class E2ETargetHandle
 
     public function __construct(
         private readonly string $target,
+        private readonly CompositionRoot $root,
+        private readonly ParamsFileWriterContract $paramsFileWriter,
+        private readonly ProcessRunner $processRunner,
     ) {}
 
     /**
@@ -83,7 +86,7 @@ final class E2ETargetHandle
      */
     public function actingAs(mixed $user, array $meta = []): self
     {
-        $issuer = CompositionRoot::instance()->authTicketIssuer();
+        $issuer = $this->root->authTicketIssuer();
         $ticket = $issuer->issueForUser($user, $meta);
 
         return $this->withAuthTicket($ticket);
@@ -115,9 +118,7 @@ final class E2ETargetHandle
      */
     public function run(): void
     {
-        $runner = CompositionRoot::instance()->runner();
-
-        $runner->run(
+        $this->root->runner()->run(
             targetName: $this->target,
             env: $this->env,
             params: $this->params,
@@ -144,9 +145,8 @@ final class E2ETargetHandle
      */
     public function call(string $target, ?string $export = null, array $params = []): void
     {
-        $root = CompositionRoot::instance();
-        $targetConfig = $root->registry()->get($this->target);
-        $runId = $root->generateRunId();
+        $targetConfig = $this->root->registry()->get($this->target);
+        $runId = $this->root->generateRunId();
 
         /** @var array<string, mixed> */
         $mergedParams = array_replace_recursive($this->params, $params);
@@ -162,7 +162,7 @@ final class E2ETargetHandle
 
         $paramsJson = $this->encodeJson($paramsDto);
 
-        $paramsFilePath = (new TempParamsFileWriter)->write(
+        $paramsFilePath = $this->paramsFileWriter->write(
             target: $context->target->name,
             runId: $context->runId,
             json: $paramsJson,
@@ -203,7 +203,7 @@ final class E2ETargetHandle
                 paramsJsonFilePath: $paramsFilePath,
             );
 
-            $result = (new ProcessRunner)->run($plan);
+            $result = $this->processRunner->run($plan);
 
             if (! $result->isSuccessful()) {
                 throw new RuntimeException(

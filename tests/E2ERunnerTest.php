@@ -2,18 +2,14 @@
 
 declare(strict_types=1);
 
-use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
+use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
-use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Runners\E2ERunner;
-use ValcuAndrei\PestE2E\Runners\ProcessRunner;
-use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
 it('runs a target command and ingests the json report', function () {
-    $registry = new TargetRegistry;
     $runId = 'run-123';
     $targetName = 'frontend';
     $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
@@ -51,15 +47,12 @@ it('runs a target command and ingests the json report', function () {
         params: [],
     );
 
+    app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($runId));
+
+    $registry = app(TargetRegistry::class);
     $registry->put($target);
 
-    $runner = new E2ERunner(
-        registry: $registry,
-        planBuilder: new ProcessPlanBuilder(new TempParamsFileWriter),
-        processRunner: new ProcessRunner,
-        reportReader: new JsonReportReader,
-        runIdGenerator: new FixedRunIdGenerator($runId),
-    );
+    $runner = app(E2ERunner::class);
 
     try {
         $runner->run($targetName);

@@ -37,9 +37,9 @@ Any change here is a breaking change.
 ## 3) Execution environment
 
 ### Decision
-- The plugin **does not require Sail**
+- The package **does not require Sail**
 - Sail is supported as a **reference environment**
-- The plugin never detects Docker, Sail, or host environments
+- The package never detects Docker, Sail, or host environments
 - Commands are executed **exactly as provided**, in the same environment Pest is running in
 
 The execution strategy is defined entirely by the configured command.
@@ -94,7 +94,7 @@ Apps may rebind this action to customize:
 ---
 
 ## 7) Env and params contract
-When spawning Node, the plugin injects:
+When spawning Node, the package injects:
 - `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON) OR `PEST_E2E_PARAMS_FILE`

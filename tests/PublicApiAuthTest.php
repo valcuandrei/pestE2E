@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-use ValcuAndrei\PestE2E\E2E;
+use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
+use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
@@ -13,9 +14,8 @@ it('passes auth ticket via params when acting as a user', function () {
         $this->markTestSkipped('Node.js not available on PATH.');
     }
 
-    E2E::reset();
-    E2E::instance()->useRunIdGenerator(new FixedRunIdGenerator('run-123'));
-    E2E::instance()->useAuthTicketIssuer(new FixedAuthTicketIssuer('ticket-123'));
+    app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator('run-123'));
+    app()->instance(AuthTicketIssuerContract::class, new FixedAuthTicketIssuer('ticket-123'));
 
     $moduleFile = tempnam(sys_get_temp_dir(), 'pest-e2e-auth-');
     $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
@@ -54,8 +54,6 @@ JS;
 });
 
 it('throws a friendly exception when actingAs is used without an auth ticket issuer', function () {
-    E2E::reset();
-
     expect(fn () => e2e('frontend')->actingAs((object) ['id' => 1]))
         ->toThrow(
             \RuntimeException::class,

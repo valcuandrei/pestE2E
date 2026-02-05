@@ -12,6 +12,8 @@ return static function (RectorConfig $rectorConfig): void {
         __DIR__.'/src',
     ]);
 
+    $rectorConfig->disableParallel();
+
     $rectorConfig->rules([
         InlineConstructorDefaultToPropertyRector::class,
     ]);

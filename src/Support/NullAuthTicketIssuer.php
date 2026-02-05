@@ -21,7 +21,7 @@ final class NullAuthTicketIssuer implements AuthTicketIssuerContract
         throw new RuntimeException(
             'No auth ticket issuer configured. '.
                 'You called actingAs()/loginAs() without configuring one. '.
-                'Use E2E::instance()->useAuthTicketIssuer(...) to provide an issuer.'
+                'Bind an AuthTicketIssuerContract implementation in the container.'
         );
     }
 }

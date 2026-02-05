@@ -39,11 +39,15 @@ All browser logic lives in JS.
 
 The execution environment is determined by **how Pest is invoked**
 (e.g. `php artisan test` vs `./vendor/bin/sail artisan test`),
-not by the plugin.
+not by the package.
 
 ## Status
 ⚠️ Early design phase
 The public API and architecture are being locked before implementation.
+
+## Laravel integration
+- Service provider is auto-discovered
+- Testing-only routes load in the `testing` environment
 
 ## Backend scope
 
