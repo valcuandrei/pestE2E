@@ -7,12 +7,14 @@ namespace ValcuAndrei\PestE2E\PublicApi;
 use JsonException;
 use RuntimeException;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
+use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
 use ValcuAndrei\PestE2E\DTO\ParamsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessCommandDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
+use ValcuAndrei\PestE2E\Enums\AuthModeType;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
 
 /**
@@ -63,14 +65,17 @@ final class E2ETargetHandle
 
     /**
      * With auth ticket.
+     *
+     * @param  array<string, mixed>  $meta
      */
-    public function withAuthTicket(string $ticket): self
+    public function withAuthTicket(AuthPayloadDTO $payload, array $meta = []): self
     {
         /** @var array<string, mixed> $mergedParams */
         $mergedParams = array_replace_recursive($this->params, [
-            'auth' => [
-                'ticket' => $ticket,
-            ],
+            'auth' => array_merge(
+                $payload->toArray(),
+                $meta !== [] ? ['meta' => $this->normalizeMeta($meta)] : [],
+            ),
         ]);
 
         $clone = clone $this;
@@ -82,24 +87,85 @@ final class E2ETargetHandle
     /**
      * Issue an auth ticket for a user.
      *
-     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>  $options
      */
-    public function actingAs(mixed $user, array $meta = []): self
+    public function actingAs(mixed $user, array $options = []): self
     {
-        $issuer = $this->root->authTicketIssuer();
-        $ticket = $issuer->issueForUser($user, $meta);
+        [$guard, $mode, $meta] = $this->extractAuthOptions($options);
 
-        return $this->withAuthTicket($ticket);
+        $issuer = $this->root->authTicketIssuer();
+        $ticket = $issuer->issueForUser($user, [
+            'guard' => $guard,
+            'meta' => $meta,
+        ]);
+
+        return $this->withAuthTicket(
+            payload: new AuthPayloadDTO(
+                ticket: $ticket,
+                mode: $mode,
+                guard: $guard,
+            ),
+            meta: $meta,
+        );
     }
 
     /**
      * Alias for actingAs().
      *
-     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>  $options
      */
-    public function loginAs(mixed $user, array $meta = []): self
+    public function loginAs(mixed $user, array $options = []): self
     {
-        return $this->actingAs($user, $meta);
+        return $this->actingAs($user, $options);
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @return array{
+     *  0:string,
+     *  1:AuthModeType,
+     *  2:array<string, mixed>,
+     * }
+     */
+    private function extractAuthOptions(array $options): array
+    {
+        $guard = 'web';
+        if (array_key_exists('guard', $options)) {
+            $guard = is_string($options['guard']) ? $options['guard'] : 'web';
+        }
+
+        $modeValue = $options['mode'] ?? AuthModeType::SESSION->value;
+        if (! is_string($modeValue) && ! is_int($modeValue)) {
+            $modeValue = AuthModeType::SESSION->value;
+        }
+
+        $mode = AuthModeType::tryFrom($modeValue) ?? AuthModeType::SESSION;
+
+        if (array_key_exists('meta', $options) && is_array($options['meta'])) {
+            return [$guard, $mode, $this->normalizeMeta($options['meta'])];
+        }
+
+        $meta = $options;
+        unset($meta['guard'], $meta['mode']);
+
+        return [$guard, $mode, $this->normalizeMeta($meta)];
+    }
+
+    /**
+     * @param  array<mixed, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function normalizeMeta(array $meta): array
+    {
+        $normalized = [];
+
+        foreach ($meta as $key => $value) {
+            if (is_string($key)) {
+                $normalized[$key] = $value;
+            }
+        }
+
+        return $normalized;
     }
 
     /**

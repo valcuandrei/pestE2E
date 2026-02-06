@@ -78,6 +78,10 @@ Flow:
    - session cookies (default)
    - or Sanctum tokens (optional)
 
+Tickets are single-use, short-lived (default 60s), and validated
+by a small package-owned ticket store. The auth endpoint is only
+loaded in `testing` and gated by a header (`X-Pest-E2E: 1` by default).
+
 ### Server-side responsibility
 
 The package provides the auth route, but delegates

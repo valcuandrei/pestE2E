@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
+use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
+use ValcuAndrei\PestE2E\Tests\Fakes\FakeUser;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
@@ -29,6 +31,7 @@ it('passes auth ticket via params when acting as a user', function () {
     $moduleContents = <<<'JS'
 export async function check({ params }) {
   if (!params.auth || params.auth.ticket !== 'ticket-123') throw new Error('missing ticket');
+  if (params.auth.mode !== 'session') throw new Error('missing mode');
   if (params.extra !== 'yes') throw new Error('missing extra');
 }
 JS;
@@ -54,7 +57,11 @@ JS;
 });
 
 it('throws a friendly exception when actingAs is used without an auth ticket issuer', function () {
-    expect(fn () => e2e('frontend')->actingAs((object) ['id' => 1]))
+    app()->instance(AuthTicketIssuerContract::class, new NullAuthTicketIssuer);
+
+    $user = new FakeUser(id: 1);
+
+    expect(fn () => e2e('frontend')->actingAs($user))
         ->toThrow(
             \RuntimeException::class,
             'No auth ticket issuer configured'

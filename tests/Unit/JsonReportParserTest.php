@@ -8,7 +8,7 @@ use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
 it('parses a valid report file', function () {
     $parser = new JsonReportParser;
 
-    $report = $parser->parseFile(__DIR__.'/Fixtures/report.valid.json');
+    $report = $parser->parseFile(__DIR__.'/../Fixtures/report.valid.json');
 
     expect($report->schema)->toBe(JsonReportParser::SCHEMA_V1)
         ->and($report->target)->toBe('frontend')
@@ -28,7 +28,7 @@ it('parses a valid report file', function () {
 it('throws on unsupported schema', function () {
     $parser = new JsonReportParser;
 
-    $fn = fn () => $parser->parseFile(__DIR__.'/Fixtures/report.bad-schema.json');
+    $fn = fn () => $parser->parseFile(__DIR__.'/../Fixtures/report.bad-schema.json');
 
     expect($fn)->toThrow(JsonReportParserException::class, 'Unsupported JSON report schema');
 });

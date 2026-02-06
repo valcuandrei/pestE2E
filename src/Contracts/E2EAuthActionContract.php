@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Contracts;
 
+use Illuminate\Http\JsonResponse;
+use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
+
 /**
  * @internal
  */
 interface E2EAuthActionContract
 {
     /**
-     * @param  array<string, mixed>  $payload
-     * @return array<string, mixed>
+     * Handle the auth payload.
      */
-    public function handle(array $payload): array;
+    public function handle(AuthPayloadDTO $payload): JsonResponse;
 }

@@ -43,3 +43,15 @@ When using Laravel, tests may authenticate E2E runs via
 
 Authentication state is transferred to JS using a
 one-time auth ticket and a testing-only login endpoint.
+
+Example:
+```php
+e2e('frontend')->actingAs($user, [
+    'guard' => 'web',
+    'mode' => 'session',
+    'meta' => ['tenant' => 'acme'],
+]);
+```
+
+The JS runner should POST the ticket to
+`/.well-known/pest-e2e/auth/login` (configurable).

@@ -25,7 +25,11 @@ Injected into every Node process:
 - stdout/stderr captured and surfaced
 
 ## Auth bridge contract
-- JS receives `params.auth.ticket`
+- JS receives `params.auth` payload
+  - `ticket` (required)
+  - `mode` (`session` or `sanctum`, default `session`)
+  - `guard` (optional)
+  - `meta` (optional)
 - JS calls a testing-only login endpoint
 - Server validates ticket and authenticates browser
 - Ticket is single-use, short-lived, testing-only
@@ -38,6 +42,25 @@ POST `/.well-known/pest-e2e/auth/login`
 
 The endpoint validates E2E auth tickets and delegates
 authentication to an application-defined action.
+
+### Request
+```json
+{
+  "ticket": "ticket-123",
+  "mode": "session",
+  "guard": "web"
+}
+```
+
+### Responses
+- `200` `{ "ok": true }` (session mode)
+- `200` `{ "ok": true, "token": "..." }` (sanctum mode)
+- `401` `{ "ok": false, "message": "..." }` (invalid/expired/used ticket)
+- `501` `{ "ok": false, "message": "..." }` (Sanctum missing or unsupported)
+
+### Security
+- The route is only loaded in `testing`
+- Requires header `X-Pest-E2E: 1` by default
 
 ### Contract
 
