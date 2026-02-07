@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\PublicApi;
 
 use JsonException;
+use Pest\TestSuite;
 use RuntimeException;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
+use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
+use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\DTO\ParamsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessCommandDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
@@ -16,6 +19,8 @@ use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Enums\AuthModeType;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
+use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
+use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
 /**
  * Returned by e2e('frontend')
@@ -35,6 +40,8 @@ final class E2ETargetHandle
         private readonly CompositionRoot $root,
         private readonly ParamsFileWriterContract $paramsFileWriter,
         private readonly ProcessRunner $processRunner,
+        private readonly E2EOutputFormatter $outputFormatter,
+        private readonly E2EOutputStore $outputStore,
     ) {}
 
     /**
@@ -120,6 +127,8 @@ final class E2ETargetHandle
     }
 
     /**
+     * Extract the auth options from the given options.
+     *
      * @param  array<string, mixed>  $options
      * @return array{
      *  0:string,
@@ -152,6 +161,8 @@ final class E2ETargetHandle
     }
 
     /**
+     * Normalize the meta data.
+     *
      * @param  array<mixed, mixed>  $meta
      * @return array<string, mixed>
      */
@@ -184,12 +195,66 @@ final class E2ETargetHandle
      */
     public function run(): void
     {
-        $this->root->runner()->run(
-            targetName: $this->target,
-            env: $this->env,
-            params: $this->params,
-            options: $this->options,
-        );
+        $runId = $this->root->generateRunId();
+        $startedAt = microtime(true);
+        $parentTestName = $this->currentTestName();
+
+        try {
+            $report = $this->root->runner()->run(
+                targetName: $this->target,
+                env: $this->env,
+                params: $this->params,
+                options: $this->options,
+                runId: $runId,
+            );
+
+            $durationSeconds = microtime(true) - $startedAt;
+
+            $lines = $this->buildRunLines(
+                target: $report->target,
+                runId: $runId,
+                ok: true,
+                durationSeconds: $durationSeconds,
+                stats: $report->stats,
+                tests: $report->tests,
+                parentTestName: $parentTestName,
+                extraLines: [],
+            );
+
+            $this->outputStore->add(
+                lines: $lines,
+                type: 'run',
+                target: $this->target,
+                runId: $runId,
+                ok: true,
+                durationSeconds: $durationSeconds,
+                stats: $report->stats,
+            );
+        } catch (RuntimeException $exception) {
+            $durationSeconds = microtime(true) - $startedAt;
+            $lines = $this->buildRunLines(
+                target: $this->target,
+                runId: $runId,
+                ok: false,
+                durationSeconds: $durationSeconds,
+                stats: null,
+                tests: [],
+                parentTestName: $parentTestName,
+                extraLines: $this->exceptionLines($exception),
+            );
+
+            $this->outputStore->add(
+                lines: $lines,
+                type: 'run',
+                target: $this->target,
+                runId: $runId,
+                ok: false,
+                durationSeconds: $durationSeconds,
+                stats: null,
+            );
+
+            throw $exception;
+        }
     }
 
     /**
@@ -213,6 +278,9 @@ final class E2ETargetHandle
     {
         $targetConfig = $this->root->registry()->get($this->target);
         $runId = $this->root->generateRunId();
+        $startedAt = microtime(true);
+        $parentTestName = $this->currentTestName();
+        $resolvedTarget = $target;
 
         /** @var array<string, mixed> */
         $mergedParams = array_replace_recursive($this->params, $params);
@@ -281,6 +349,50 @@ final class E2ETargetHandle
                         "STDERR:\n{$result->stderr}"
                 );
             }
+
+            $durationSeconds = microtime(true) - $startedAt;
+            $lines = $this->buildCallLines(
+                target: $this->target,
+                resolvedTarget: $resolvedTarget,
+                runId: $runId,
+                ok: true,
+                durationSeconds: $durationSeconds,
+                parentTestName: $parentTestName,
+                extraLines: [],
+            );
+
+            $this->outputStore->add(
+                lines: $lines,
+                type: 'call',
+                target: $this->target,
+                runId: $runId,
+                ok: true,
+                durationSeconds: $durationSeconds,
+                stats: null,
+            );
+        } catch (RuntimeException $exception) {
+            $durationSeconds = microtime(true) - $startedAt;
+            $lines = $this->buildCallLines(
+                target: $this->target,
+                resolvedTarget: $resolvedTarget,
+                runId: $runId,
+                ok: false,
+                durationSeconds: $durationSeconds,
+                parentTestName: $parentTestName,
+                extraLines: $this->exceptionLines($exception),
+            );
+
+            $this->outputStore->add(
+                lines: $lines,
+                type: 'call',
+                target: $this->target,
+                runId: $runId,
+                ok: false,
+                durationSeconds: $durationSeconds,
+                stats: null,
+            );
+
+            throw $exception;
         } finally {
             @unlink($paramsFilePath);
         }
@@ -339,5 +451,157 @@ final class E2ETargetHandle
     private function encodeJson(ParamsDTO $paramsDto): string
     {
         return json_encode($paramsDto->toArray(), JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Get the current test name.
+     */
+    private function currentTestName(): ?string
+    {
+        $test = null;
+
+        if (function_exists('test')) {
+            try {
+                $test = test();
+            } catch (\Throwable) {
+                $test = null;
+            }
+        }
+
+        if (is_object($test)) {
+            $name = $this->resolveTestName($test);
+            if ($name !== null) {
+                return $name;
+            }
+        }
+
+        if (class_exists(TestSuite::class)) {
+            try {
+                $suite = TestSuite::getInstance();
+                if (is_object($suite->test)) {
+                    return $this->resolveTestName($suite->test);
+                }
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the test name.
+     */
+    private function resolveTestName(object $test): ?string
+    {
+        if (method_exists($test, 'getPrintableTestCaseMethodName')) {
+            try {
+                $name = $test->getPrintableTestCaseMethodName();
+            } catch (\Throwable) {
+                $name = null;
+            }
+
+            if (is_string($name) && $name !== '') {
+                return $name;
+            }
+        }
+
+        if (method_exists($test, 'name')) {
+            try {
+                $rawName = $test->name();
+
+                if (! is_string($rawName) || $rawName === '') {
+                    return null;
+                }
+
+                if (str_starts_with($rawName, '__pest_evaluable_')) {
+                    $rawName = substr($rawName, strlen('__pest_evaluable_'));
+                }
+
+                $name = str_replace('_', ' ', $rawName);
+            } catch (\Throwable) {
+                $name = null;
+            }
+
+            if (is_string($name) && $name !== '') {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Build the run lines.
+     *
+     * @param  array<int, JsonReportTestDTO>  $tests
+     * @param  array<int, string>  $extraLines
+     * @return array<int, string>
+     */
+    private function buildRunLines(
+        string $target,
+        string $runId,
+        bool $ok,
+        ?float $durationSeconds,
+        ?JsonReportStatsDTO $stats,
+        array $tests,
+        ?string $parentTestName,
+        array $extraLines,
+    ): array {
+        return $this->outputFormatter->buildRunLines(
+            target: $target,
+            runId: $runId,
+            ok: $ok,
+            durationSeconds: $durationSeconds,
+            stats: $stats,
+            tests: $tests,
+            parentTestName: $parentTestName,
+            extraLines: $extraLines,
+        );
+    }
+
+    /**
+     * Build the call lines.
+     *
+     * @param  array<int, string>  $extraLines
+     * @return array<int, string>
+     */
+    private function buildCallLines(
+        string $target,
+        string $resolvedTarget,
+        string $runId,
+        bool $ok,
+        ?float $durationSeconds,
+        ?string $parentTestName,
+        array $extraLines,
+    ): array {
+        return $this->outputFormatter->buildCallLines(
+            target: $target,
+            resolvedTarget: $resolvedTarget,
+            runId: $runId,
+            ok: $ok,
+            durationSeconds: $durationSeconds,
+            parentTestName: $parentTestName,
+            extraLines: $extraLines,
+        );
+    }
+
+    /**
+     * Build the exception lines.
+     *
+     * @return array<int, string>
+     */
+    private function exceptionLines(RuntimeException $exception): array
+    {
+        $message = trim($exception->getMessage());
+
+        if ($message === '') {
+            return [];
+        }
+
+        return array_values(array_filter(
+            explode("\n", $message),
+            static fn (string $line): bool => $line !== '',
+        ));
     }
 }

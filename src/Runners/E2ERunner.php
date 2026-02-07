@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E\Runners;
 use RuntimeException;
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
+use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
@@ -35,10 +36,15 @@ final readonly class E2ERunner
      * @param  array<string,mixed>  $params
      * @param  ProcessOptionsDTO|null  $options  (optional) process options
      */
-    public function run(string $targetName, array $env = [], array $params = [], ?ProcessOptionsDTO $options = null): void
-    {
+    public function run(
+        string $targetName,
+        array $env = [],
+        array $params = [],
+        ?ProcessOptionsDTO $options = null,
+        ?string $runId = null,
+    ): JsonReportDTO {
         $target = $this->registry->get($targetName);
-        $runId = $this->runIdGenerator->generate();
+        $runId ??= $this->runIdGenerator->generate();
         $context = RunContextDTO::make($target, $runId, $env, $params);
         $plan = $this->planBuilder->build($context, $options);
         $result = $this->processRunner->run($plan);
@@ -66,5 +72,7 @@ final readonly class E2ERunner
 
             throw new RuntimeException("E2E failures for {$targetName} ({$runId}):\n".implode("\n", $lines));
         }
+
+        return $report;
     }
 }
