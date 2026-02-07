@@ -29,15 +29,43 @@ final class Plugin implements AddsOutput, Terminable
     {
         $entries = $this->store->flush();
         $lines = [];
+        $currentParent = null;
+        $hasOutput = false;
 
-        foreach ($entries as $index => $entry) {
-            if ($index > 0) {
+        foreach ($entries as $entry) {
+            $grouped = $this->splitGroupedLines($entry->lines);
+
+            if ($grouped !== null) {
+                [$parent, $childLines] = $grouped;
+
+                if ($currentParent !== $parent) {
+                    if ($hasOutput) {
+                        $lines[] = '';
+                    }
+
+                    $lines[] = $parent;
+                    $currentParent = $parent;
+                }
+
+                foreach ($childLines as $line) {
+                    $lines[] = $line;
+                }
+
+                $hasOutput = true;
+
+                continue;
+            }
+
+            if ($hasOutput) {
                 $lines[] = '';
             }
 
             foreach ($entry->lines as $line) {
                 $lines[] = $line;
             }
+
+            $currentParent = null;
+            $hasOutput = true;
         }
 
         if ($lines !== []) {
@@ -53,5 +81,25 @@ final class Plugin implements AddsOutput, Terminable
     public function terminate(): void
     {
         $this->store->flush();
+    }
+
+    /**
+     * @param  array<int, string>  $lines
+     * @return array{0:string,1:array<int, string>}|null
+     */
+    private function splitGroupedLines(array $lines): ?array
+    {
+        if (count($lines) < 2) {
+            return null;
+        }
+
+        $parent = trim($lines[0]);
+        $firstChild = $lines[1] ?? '';
+
+        if ($parent === '' || ! str_starts_with($firstChild, '  └─ ')) {
+            return null;
+        }
+
+        return [$parent, array_slice($lines, 1)];
     }
 }

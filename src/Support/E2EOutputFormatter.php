@@ -39,7 +39,7 @@ final class E2EOutputFormatter
         $status = $ok ? '✅ PASSED' : '❌ FAILED';
         $suffix = '';
 
-        if ($stats instanceof \ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO) {
+        if ($stats instanceof JsonReportStatsDTO) {
             $duration = $this->formatDurationFromStats($stats, $durationSeconds);
             $suffix = sprintf(
                 ' (passed=%d failed=%d skipped=%d, %s)',
@@ -70,7 +70,7 @@ final class E2EOutputFormatter
             $lines = array_merge($lines, $this->buildTestLines($tests));
         }
 
-        if ($stats instanceof \ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO) {
+        if ($stats instanceof JsonReportStatsDTO) {
             $lines[] = $this->childIndent().sprintf(
                 'passed=%d failed=%d skipped=%d  duration=%s',
                 $stats->passed,

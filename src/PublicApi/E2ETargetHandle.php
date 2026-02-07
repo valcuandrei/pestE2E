@@ -514,8 +514,9 @@ final class E2ETargetHandle
                     return null;
                 }
 
-                if (str_starts_with($rawName, '__pest_evaluable_')) {
-                    $rawName = substr($rawName, strlen('__pest_evaluable_'));
+                $prefix = '__pest_evaluable_';
+                if (str_starts_with($rawName, $prefix)) {
+                    $rawName = substr($rawName, strlen($prefix));
                 }
 
                 $name = str_replace('_', ' ', $rawName);
@@ -523,7 +524,7 @@ final class E2ETargetHandle
                 $name = null;
             }
 
-            if (is_string($name) && $name !== '') {
+            if ($name !== null && $name !== '') {
                 return $name;
             }
         }
