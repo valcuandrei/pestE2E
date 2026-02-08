@@ -52,6 +52,8 @@ final readonly class E2ERunner
         if (! $result->isSuccessful()) {
             throw new RuntimeException(
                 "E2E command failed (exit {$result->exitCode}).\n\n".
+                    "TARGET:\n{$targetName}\n\n" .
+                    "RUN_ID:\n{$runId}\n\n" .
                     "CMD:\n{$plan->command->command}\n\n".
                     "CWD:\n{$plan->command->workingDirectory}\n\n".
                     "STDOUT:\n{$result->stdout}\n\n".
@@ -60,18 +62,6 @@ final readonly class E2ERunner
         }
 
         $report = $this->reportReader->readForRun($context);
-
-        if ($report->hasFailures()) {
-            $lines = [];
-            foreach ($report->getFailedTests() as $t) {
-                $lines[] = "- {$t->name}".($t->file ? " ({$t->file})" : '');
-                if ($t->error?->message) {
-                    $lines[] = "  {$t->error->message}";
-                }
-            }
-
-            throw new RuntimeException("E2E failures for {$targetName} ({$runId}):\n".implode("\n", $lines));
-        }
 
         return $report;
     }

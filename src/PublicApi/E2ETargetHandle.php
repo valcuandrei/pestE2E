@@ -9,6 +9,7 @@ use Pest\TestSuite;
 use RuntimeException;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
+use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\DTO\ParamsDTO;
@@ -199,6 +200,11 @@ final class E2ETargetHandle
         $startedAt = microtime(true);
         $parentTestName = $this->currentTestName();
 
+        $report = null;
+        $ok = false;
+        $thrown = null;
+        $extraLines = [];
+
         try {
             $report = $this->root->runner()->run(
                 targetName: $this->target,
@@ -208,52 +214,43 @@ final class E2ETargetHandle
                 runId: $runId,
             );
 
-            $durationSeconds = microtime(true) - $startedAt;
+            $ok = ! $report->hasFailures();
 
-            $lines = $this->buildRunLines(
-                target: $report->target,
-                runId: $runId,
-                ok: true,
-                durationSeconds: $durationSeconds,
-                stats: $report->stats,
-                tests: $report->tests,
-                parentTestName: $parentTestName,
-                extraLines: [],
-            );
+            if (! $ok) {
+                $thrown = $this->reportFailureException($report, $runId);
+                $extraLines = $this->exceptionLines($thrown);
+            }
+        } catch (RuntimeException $e) {
+            $ok = false;
+            $thrown = $e;
+            $extraLines = $this->exceptionLines($e);
+        }
 
-            $this->outputStore->add(
-                lines: $lines,
-                type: 'run',
-                target: $this->target,
-                runId: $runId,
-                ok: true,
-                durationSeconds: $durationSeconds,
-                stats: $report->stats,
-            );
-        } catch (RuntimeException $exception) {
-            $durationSeconds = microtime(true) - $startedAt;
-            $lines = $this->buildRunLines(
-                target: $this->target,
-                runId: $runId,
-                ok: false,
-                durationSeconds: $durationSeconds,
-                stats: null,
-                tests: [],
-                parentTestName: $parentTestName,
-                extraLines: $this->exceptionLines($exception),
-            );
+        $durationSeconds = microtime(true) - $startedAt;
 
-            $this->outputStore->add(
-                lines: $lines,
-                type: 'run',
-                target: $this->target,
-                runId: $runId,
-                ok: false,
-                durationSeconds: $durationSeconds,
-                stats: null,
-            );
+        $lines = $this->buildRunLines(
+            target: $report?->target ?? $this->target,
+            runId: $runId,
+            ok: $ok,
+            durationSeconds: $durationSeconds,
+            stats: $report?->stats,
+            tests: $report?->tests ?? [],
+            parentTestName: $parentTestName,
+            extraLines: $extraLines,
+        );
 
-            throw $exception;
+        $this->outputStore->add(
+            lines: $lines,
+            type: 'run',
+            target: $this->target,
+            runId: $runId,
+            ok: $ok,
+            durationSeconds: $durationSeconds,
+            stats: $report?->stats,
+        );
+
+        if ($thrown !== null) {
+            throw $thrown;
         }
     }
 
@@ -604,5 +601,21 @@ final class E2ETargetHandle
             explode("\n", $message),
             static fn (string $line): bool => $line !== '',
         ));
+    }
+
+    private function reportFailureException(JsonReportDTO $report, string $runId): RuntimeException
+    {
+        $lines = [];
+
+        foreach ($report->getFailedTests() as $test) {
+            $lines[] = "- {$test->name}".($test->file ? " ({$test->file})" : '');
+            if ($test->error?->message) {
+                $lines[] = "  {$test->error->message}";
+            }
+        }
+
+        return new RuntimeException(
+            "E2E failures for {$this->target} ({$runId}):\n".implode("\n", $lines)
+        );
     }
 }
