@@ -16,10 +16,12 @@ it('injects target and run id even when there are no params', function () {
         dir: 'js',
         runner: 'Playwright',
         command: 'npx playwright test',
-        reportType: 'junit',
-        reportPath: 'reports/junit.xml',
+        reportType: 'json',
+        reportPath: 'reports/report.json',
         env: ['APP_URL' => 'http://localhost'],
         params: [],
+        artifactsDir: null,
+        filterFlag: null,
     );
 
     $ctx = RunContextDTO::make($target, 'run-123');
@@ -44,10 +46,12 @@ it('uses inline params when JSON is small enough', function () {
         dir: 'js',
         runner: 'Playwright',
         command: 'npx playwright test',
-        reportType: 'junit',
-        reportPath: 'reports/junit.xml',
+        reportType: 'json',
+        reportPath: 'reports/report.json',
         env: ['APP_URL' => 'http://localhost'],
         params: ['baseUrl' => 'http://localhost'],
+        artifactsDir: null,
+        filterFlag: null,
     );
 
     $ctx = RunContextDTO::make($target, 'run-abc');
@@ -72,10 +76,12 @@ it('uses params file when JSON is too large', function () {
         dir: 'js',
         runner: 'Playwright',
         command: 'npx playwright test',
-        reportType: 'junit',
-        reportPath: 'reports/junit.xml',
+        reportType: 'json',
+        reportPath: 'reports/report.json',
         env: ['APP_URL' => 'http://localhost'],
         params: ['baseUrl' => 'http://localhost', 'auth' => ['ticket' => str_repeat('x', 100)]],
+        artifactsDir: null,
+        filterFlag: null,
     );
 
     $ctx = RunContextDTO::make($target, 'run-big');
@@ -91,4 +97,53 @@ it('uses params file when JSON is too large', function () {
         ->and($writer->lastTarget)->toBe('frontend')
         ->and($writer->lastRunId)->toBe('run-big')
         ->and($writer->lastJson)->toBeString();
+});
+it('applies filter when configured and requested', function () {
+    $writer = new FakeParamsFileWriter;
+    $builder = new ProcessPlanBuilder($writer);
+
+    $target = new TargetConfigDTO(
+        name: 'frontend',
+        dir: 'js',
+        runner: 'Playwright',
+        command: 'npx playwright test',
+        reportType: 'junit',
+        reportPath: 'reports/junit.xml',
+        env: [],
+        params: [],
+        artifactsDir: null,
+        filterFlag: '--grep',
+    );
+
+    $ctx = RunContextDTO::make($target, 'run-123', [], [], 'can checkout');
+
+    $plan = $builder->build($ctx);
+
+    expect($plan->command->command)
+        ->toContain('npx playwright test')
+        ->toContain('--grep')
+        ->toContain('can checkout');
+});
+
+it('throws when filter requested but not configured', function () {
+    $writer = new FakeParamsFileWriter;
+    $builder = new ProcessPlanBuilder($writer);
+
+    $target = new TargetConfigDTO(
+        name: 'frontend',
+        dir: 'js',
+        runner: 'Playwright',
+        command: 'npx playwright test',
+        reportType: 'json',
+        reportPath: 'reports/report.json',
+        env: [],
+        params: [],
+        artifactsDir: null,
+        filterFlag: null,
+    );
+
+    $ctx = RunContextDTO::make($target, 'run-123', [], [], 'can checkout');
+
+    expect(fn () => $builder->build($ctx))
+        ->toThrow(RuntimeException::class, 'does not support filtering');
 });

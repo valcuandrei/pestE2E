@@ -34,7 +34,11 @@ ingests a JSON report, and fails Pest tests on JS failures.
 ## Next tasks
 1. Add package docs for Laravel installation and config
 2. Expand auth route validation and payload support
-3. Leave import() stubbed (reserved for future versions)
+
+## Recently Implemented
+- **Test Filtering**: Added `only()` and `runTest()` methods for running specific JS tests
+- **Target Configuration**: Added `filter()` method to target builder for configuring runner-specific filter flags
+- **Error Handling**: Comprehensive validation when filtering is requested but not configured
 
 ## Scope boundary
 

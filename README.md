@@ -1,7 +1,7 @@
 # pestE2E
 
 Laravel-first backend, frontend-runner-agnostic bridge that runs **JS-owned** E2E/component tests (Playwright by default)
-from Pest **without introducing a PHP browser DSL**.
+from Pest **without introducing a PHP browser DSL**. Supports test filtering for running specific tests.
 
 ## What this is
 
@@ -17,6 +17,14 @@ Think of this as an **Inertia-style bridge for E2E testing**:
 
 Pest orchestrates JS test execution, passes context (env, params, auth),
 and maps structured results back into Pest output.
+
+## Key Features
+
+- **JS Test Filtering**: Run specific tests with `e2e('frontend')->only('test name')` or `runTest('test name')`
+- **Laravel Authentication**: Transfer auth state using `actingAs($user)` with one-time tickets
+- **Runner Agnostic**: Supports Playwright, Jest, and other JS runners via configurable commands
+- **Environment Aware**: Automatically inherits Laravel's execution environment (local, Docker, Sail)
+- **Type Safe**: Full PHPStan level compliance with robust type checking
 
 ## Terminology
 - Project: the Laravel app (backend)
@@ -58,3 +66,26 @@ This package is **Laravel-native by design**.
 - Laravel DX (`actingAs`, personas) is a first-class goal
 
 Runner-agnosticism applies to **targets**, not the Laravel app.
+
+## Quick Start
+
+```php
+// Configure target with filtering support
+e2e()->target('frontend', fn ($p) => $p
+    ->dir('frontend')
+    ->command('npx playwright test')
+    ->filter('--grep') // Enable test filtering
+    ->report('json', 'test-results/report.json')
+);
+
+// Run all tests
+e2e('frontend')->run();
+
+// Run specific test
+e2e('frontend')->only('can login')->run();
+
+// Run specific test with authentication  
+e2e('frontend')
+    ->actingAs($user)
+    ->runTest('can checkout');
+```

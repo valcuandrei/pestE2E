@@ -69,19 +69,23 @@ final readonly class JsonReportErrorDTO
      */
     public static function fromJson(string $json): self
     {
-        return self::fromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        assert(is_array($data));
+
+        return self::fromArray($data);
     }
 
     /**
      * Create a new JsonReportErrorDTO instance from an array.
-     *
-     * @param  array{
-     *  message:string,
-     *  stack:string|null,
-     * }  $array
      */
-    public static function fromArray(array $array): self
+    public static function fromArray(mixed $array): self
     {
+        assert(is_array($array));
+        assert(array_key_exists('message', $array));
+        assert(array_key_exists('stack', $array));
+        assert(is_string($array['message']));
+        assert(is_string($array['stack']) || $array['stack'] === null);
+
         return new self(
             message: $array['message'],
             stack: $array['stack'],

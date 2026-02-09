@@ -30,11 +30,12 @@ final readonly class E2ERunner
     ) {}
 
     /**
-     * Create a new E2ERunner instance.
+     * Run the E2E test suite for a target.
      *
      * @param  array<string,string>  $env
      * @param  array<string,mixed>  $params
      * @param  ProcessOptionsDTO|null  $options  (optional) process options
+     * @param  string|null  $testFilter  (optional) test filter
      */
     public function run(
         string $targetName,
@@ -42,18 +43,20 @@ final readonly class E2ERunner
         array $params = [],
         ?ProcessOptionsDTO $options = null,
         ?string $runId = null,
+        ?string $testFilter = null,
     ): JsonReportDTO {
         $target = $this->registry->get($targetName);
         $runId ??= $this->runIdGenerator->generate();
-        $context = RunContextDTO::make($target, $runId, $env, $params);
+        $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
         $plan = $this->planBuilder->build($context, $options);
         $result = $this->processRunner->run($plan);
 
         if (! $result->isSuccessful()) {
             throw new RuntimeException(
                 "E2E command failed (exit {$result->exitCode}).\n\n".
-                    "TARGET:\n{$targetName}\n\n" .
-                    "RUN_ID:\n{$runId}\n\n" .
+                    "TARGET:\n{$target->name}\n\n".
+                    (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").
+                    "RUN_ID:\n{$runId}\n\n".
                     "CMD:\n{$plan->command->command}\n\n".
                     "CWD:\n{$plan->command->workingDirectory}\n\n".
                     "STDOUT:\n{$result->stdout}\n\n".
@@ -61,8 +64,6 @@ final readonly class E2ERunner
             );
         }
 
-        $report = $this->reportReader->readForRun($context);
-
-        return $report;
+        return $this->reportReader->readForRun($context);
     }
 }

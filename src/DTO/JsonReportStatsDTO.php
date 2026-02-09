@@ -117,21 +117,27 @@ final readonly class JsonReportStatsDTO
      */
     public static function fromJson(string $json): self
     {
-        return self::fromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        assert(is_array($data));
+
+        return self::fromArray($data);
     }
 
     /**
      * Create a new JsonReportStatsDTO instance from an array.
-     *
-     * @param  array{
-     *  passed:int,
-     *  failed:int,
-     *  skipped:int,
-     *  durationMs:int,
-     * }  $array
      */
-    public static function fromArray(array $array): self
+    public static function fromArray(mixed $array): self
     {
+        assert(is_array($array));
+        assert(array_key_exists('passed', $array));
+        assert(array_key_exists('failed', $array));
+        assert(array_key_exists('skipped', $array));
+        assert(array_key_exists('durationMs', $array));
+        assert(is_int($array['passed']));
+        assert(is_int($array['failed']));
+        assert(is_int($array['skipped']));
+        assert(is_int($array['durationMs']));
+
         return new self(
             passed: $array['passed'],
             failed: $array['failed'],

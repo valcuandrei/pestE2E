@@ -14,7 +14,7 @@ final readonly class JsonReportArtifactsDTO
     /**
      * @param  string|null  $trace  (optional) trace
      * @param  string|null  $video  (optional) video
-     * @param  array<int, string>  $screenshots  screenshots
+     * @param  list<string>  $screenshots  screenshots
      */
     public function __construct(
         public ?string $trace = null,
@@ -56,7 +56,7 @@ final readonly class JsonReportArtifactsDTO
         return new self(
             trace: $this->trace,
             video: $this->video,
-            screenshots: $screenshots,
+            screenshots: array_values($screenshots),
         );
     }
 
@@ -91,24 +91,36 @@ final readonly class JsonReportArtifactsDTO
      */
     public static function fromJson(string $json): self
     {
-        return self::fromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        assert(is_array($data));
+
+        return self::fromArray($data);
     }
 
     /**
      * Create a new JsonReportArtifactsDTO instance from an array.
-     *
-     * @param  array{
-     *  trace:string|null,
-     *  video:string|null,
-     *  screenshots:list<string>,
-     * }  $array
      */
-    public static function fromArray(array $array): self
+    public static function fromArray(mixed $array): self
     {
+        assert(is_array($array));
+        assert(array_key_exists('trace', $array));
+        assert(array_key_exists('video', $array));
+        assert(array_key_exists('screenshots', $array));
+        assert(is_array($array['screenshots']));
+        assert(is_string($array['trace']) || $array['trace'] === null);
+        assert(is_string($array['video']) || $array['video'] === null);
+
+        $screenshots = array_values($array['screenshots']);
+        $typedScreenshots = [];
+        foreach ($screenshots as $screenshot) {
+            assert(is_string($screenshot));
+            $typedScreenshots[] = $screenshot;
+        }
+
         return new self(
             trace: $array['trace'],
             video: $array['video'],
-            screenshots: $array['screenshots'],
+            screenshots: $typedScreenshots,
         );
     }
 

@@ -14,7 +14,7 @@ final class TargetBuilder
 {
     private ?string $dir = null;
 
-    private ?string $runner = null; // informational only
+    private ?string $runner = null;
 
     private ?string $command = null;
 
@@ -28,10 +28,15 @@ final class TargetBuilder
     /** @var array<string,mixed> */
     private array $params = [];
 
+    private ?string $filterFlag = null;
+
     public function __construct(
         private readonly string $name,
     ) {}
 
+    /**
+     * Set the directory of the target.
+     */
     public function dir(string $dir): self
     {
         $this->dir = $dir;
@@ -39,6 +44,9 @@ final class TargetBuilder
         return $this;
     }
 
+    /**
+     * Set the runner of the target.
+     */
     public function runner(string $runner): self
     {
         $this->runner = $runner;
@@ -46,14 +54,19 @@ final class TargetBuilder
         return $this;
     }
 
+    /**
+     * Set the command of the target.
+     */
     public function command(string $command): self
     {
-        // Per spec: MUST NOT include sail/docker wrappers — enforcement can be added later.
         $this->command = $command;
 
         return $this;
     }
 
+    /**
+     * Set the report of the target.
+     */
     public function report(string $type, string $path): self
     {
         $this->reportType = $type;
@@ -62,7 +75,11 @@ final class TargetBuilder
         return $this;
     }
 
-    /** @param array<string,string> $env */
+    /**
+     * Set the environment variables of the target.
+     *
+     * @param  array<string,string>  $env
+     */
     public function env(array $env): self
     {
         $this->env = array_replace($this->env, $env);
@@ -70,7 +87,11 @@ final class TargetBuilder
         return $this;
     }
 
-    /** @param array<string,mixed> $params */
+    /**
+     * Set the parameters of the target.
+     *
+     * @param  array<string,mixed>  $params
+     */
     public function params(array $params): self
     {
         $this->params = array_replace($this->params, $params);
@@ -78,6 +99,22 @@ final class TargetBuilder
         return $this;
     }
 
+    /**
+     * Set the filter flag of the target.
+     */
+    public function filter(string $flag): self
+    {
+        $this->filterFlag = $flag;
+
+        return $this;
+    }
+
+    /**
+     * Convert the target builder to a TargetConfigDTO instance.
+     *
+     *
+     * @throws RuntimeException
+     */
     public function toTargetConfig(): TargetConfigDTO
     {
         if ($this->dir === null) {
@@ -92,7 +129,6 @@ final class TargetBuilder
             throw new RuntimeException("E2E target '{$this->name}' is missing report(type, path).");
         }
 
-        // Adjust ctor args to your real DTO signature if needed.
         return new TargetConfigDTO(
             name: $this->name,
             dir: $this->dir,
@@ -102,6 +138,8 @@ final class TargetBuilder
             reportPath: $this->reportPath,
             env: $this->env,
             params: $this->params,
+            artifactsDir: null,
+            filterFlag: $this->filterFlag,
         );
     }
 }

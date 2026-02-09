@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\Builders;
 
 use JsonException;
+use RuntimeException;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\ParamsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessCommandDTO;
@@ -40,13 +41,25 @@ final readonly class ProcessPlanBuilder
      * Build a new ProcessPlanDTO instance.
      *
      * @param  ProcessOptionsDTO|null  $options  (optional) process options
+     *
+     * @throws RuntimeException
      */
     public function build(RunContextDTO $context, ?ProcessOptionsDTO $options = null): ProcessPlanDTO
     {
         $options ??= new ProcessOptionsDTO;
+        $command = $context->target->command;
+        $filter = $context->testFilter !== null ? trim($context->testFilter) : null;
+
+        if (! in_array($filter, [null, '', '0'], true)) {
+            if ($context->target->filterFlag === null) {
+                throw new RuntimeException("Target \"{$context->target->name}\" does not support filtering. Configure it with ->filter('--flag').");
+            }
+
+            $command = $command.' '.$context->target->filterFlag.' '.escapeshellarg($filter);
+        }
 
         $commandDto = new ProcessCommandDTO(
-            command: $context->target->command,
+            command: $command,
             workingDirectory: $context->target->dir,
             env: $context->env,
         );
@@ -73,7 +86,7 @@ final readonly class ProcessPlanBuilder
 
         $json = $this->encodeJson($paramsDto);
 
-        if (mb_strlen($json) <= $this->maxInlineBytes) {
+        if (strlen($json) <= $this->maxInlineBytes) {
             $commandDto = $plan->command->withInjectedEnv([
                 'PEST_E2E_PARAMS' => $json,
             ]);
@@ -100,7 +113,6 @@ final readonly class ProcessPlanBuilder
 
     /**
      * Encode the params to JSON.
-     *
      *
      *
      * @throws JsonException

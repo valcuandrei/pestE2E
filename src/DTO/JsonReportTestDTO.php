@@ -212,31 +212,32 @@ final readonly class JsonReportTestDTO
      */
     public static function fromJson(string $json): self
     {
-        return self::fromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        assert(is_array($data));
+
+        return self::fromArray($data);
     }
 
     /**
      * Create a new JsonReportTestDTO instance from an array.
-     *
-     * @param  array{
-     *  name:string,
-     *  status:string,
-     *  file:string|null,
-     *  durationMs:int|null,
-     *  id:string|null,
-     *  error:array{
-     *   message:string,
-     *   stack:string|null,
-     *  }|null,
-     *  artifacts:array{
-     *   trace:string|null,
-     *   video:string|null,
-     *   screenshots:list<string>,
-     *  }|null,
-     * }  $array
      */
-    public static function fromArray(array $array): self
+    public static function fromArray(mixed $array): self
     {
+        assert(is_array($array));
+        assert(array_key_exists('name', $array));
+        assert(array_key_exists('status', $array));
+        assert(is_string($array['name']));
+        assert(is_string($array['status']));
+
+        $file = $array['file'] ?? null;
+        assert(is_string($file) || $file === null);
+
+        $durationMs = $array['durationMs'] ?? null;
+        assert(is_int($durationMs) || $durationMs === null);
+
+        $id = $array['id'] ?? null;
+        assert(is_string($id) || $id === null);
+
         $status = TestStatusType::tryFrom($array['status']);
 
         if ($status === null) {
@@ -246,11 +247,11 @@ final readonly class JsonReportTestDTO
         return new self(
             name: $array['name'],
             status: $status,
-            file: $array['file'],
-            durationMs: $array['durationMs'],
-            id: $array['id'],
-            error: $array['error'] ? JsonReportErrorDTO::fromArray($array['error']) : null,
-            artifacts: $array['artifacts'] ? JsonReportArtifactsDTO::fromArray($array['artifacts']) : null,
+            file: $file,
+            durationMs: $durationMs,
+            id: $id,
+            error: isset($array['error']) && $array['error'] ? JsonReportErrorDTO::fromArray($array['error']) : null,
+            artifacts: isset($array['artifacts']) && $array['artifacts'] ? JsonReportArtifactsDTO::fromArray($array['artifacts']) : null,
         );
     }
 

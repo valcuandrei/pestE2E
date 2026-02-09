@@ -36,6 +36,8 @@ final class E2ETargetHandle
 
     private ?ProcessOptionsDTO $options = null;
 
+    private ?string $testFilter = null;
+
     public function __construct(
         private readonly string $target,
         private readonly CompositionRoot $root,
@@ -212,6 +214,7 @@ final class E2ETargetHandle
                 params: $this->params,
                 options: $this->options,
                 runId: $runId,
+                testFilter: $this->testFilter,
             );
 
             $ok = ! $report->hasFailures();
@@ -229,12 +232,12 @@ final class E2ETargetHandle
         $durationSeconds = microtime(true) - $startedAt;
 
         $lines = $this->buildRunLines(
-            target: $report?->target ?? $this->target,
+            target: $report instanceof \ValcuAndrei\PestE2E\DTO\JsonReportDTO ? $report->target : $this->target,
             runId: $runId,
             ok: $ok,
             durationSeconds: $durationSeconds,
             stats: $report?->stats,
-            tests: $report?->tests ?? [],
+            tests: $report instanceof \ValcuAndrei\PestE2E\DTO\JsonReportDTO ? $report->tests : [],
             parentTestName: $parentTestName,
             extraLines: $extraLines,
         );
@@ -249,18 +252,28 @@ final class E2ETargetHandle
             stats: $report?->stats,
         );
 
-        if ($thrown !== null) {
+        if ($thrown instanceof \RuntimeException) {
             throw $thrown;
         }
     }
 
     /**
-     * import() — import JS tests as Pest tests
-     * Stub for now (public surface reserved).
+     * only() — set test filter, returns clone for chaining
      */
-    public function import(): never
+    public function only(string $testName): self
     {
-        throw new RuntimeException('e2e()->import() is not implemented yet.');
+        $clone = clone $this;
+        $clone->testFilter = $testName;
+
+        return $clone;
+    }
+
+    /**
+     * runTest() — convenience method, equivalent to only($testName)->run()
+     */
+    public function runTest(string $testName): void
+    {
+        $this->only($testName)->run();
     }
 
     /**

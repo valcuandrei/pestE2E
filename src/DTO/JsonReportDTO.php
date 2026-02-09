@@ -148,7 +148,7 @@ final readonly class JsonReportDTO
      */
     public function getTests(): array
     {
-        return $this->tests;
+        return array_values($this->tests);
     }
 
     /**
@@ -189,7 +189,7 @@ final readonly class JsonReportDTO
             'target' => $this->target,
             'runId' => $this->runId,
             'stats' => $this->stats->toArray(),
-            'tests' => array_map(static fn (JsonReportTestDTO $t): array => $t->toArray(), $this->tests),
+            'tests' => array_values(array_map(static fn (JsonReportTestDTO $t): array => $t->toArray(), $this->tests)),
         ];
     }
 
@@ -206,48 +206,34 @@ final readonly class JsonReportDTO
      */
     public static function fromJson(string $json): self
     {
-        return self::fromArray(json_decode($json, true, 512, JSON_THROW_ON_ERROR));
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        assert(is_array($data));
+
+        return self::fromArray($data);
     }
 
     /**
      * Create a new JsonReportDTO instance from an array.
-     *
-     * @param  array{
-     *  schema:string,
-     *  target:string,
-     *  runId:string,
-     *  stats:array{
-     *   passed:int,
-     *   failed:int,
-     *   skipped:int,
-     *   durationMs:int,
-     *  },
-     *  tests:list<array{
-     *   name:string,
-     *   status:string,
-     *   file:string|null,
-     *   durationMs:int|null,
-     *   id:string|null,
-     *   error:array{
-     *    message:string,
-     *    stack:string|null,
-     *   }|null,
-     *   artifacts:array{
-     *    trace:string|null,
-     *    video:string|null,
-     *    screenshots:list<string>,
-     *   }|null,
-     *  }>,
-     * }  $array
      */
-    public static function fromArray(array $array): self
+    public static function fromArray(mixed $array): self
     {
+        assert(is_array($array));
+        assert(array_key_exists('schema', $array));
+        assert(array_key_exists('target', $array));
+        assert(array_key_exists('runId', $array));
+        assert(array_key_exists('stats', $array));
+        assert(array_key_exists('tests', $array));
+        assert(is_array($array['tests']));
+        assert(is_string($array['schema']));
+        assert(is_string($array['target']));
+        assert(is_string($array['runId']));
+
         return new self(
             schema: $array['schema'],
             target: $array['target'],
             runId: $array['runId'],
             stats: JsonReportStatsDTO::fromArray($array['stats']),
-            tests: array_map(JsonReportTestDTO::fromArray(...), $array['tests']),
+            tests: array_values(array_map(JsonReportTestDTO::fromArray(...), $array['tests'])),
         );
     }
 
