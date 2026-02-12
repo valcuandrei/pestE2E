@@ -19,15 +19,24 @@ final class Plugin implements AddsOutput, Terminable
      */
     public function __construct(
         private readonly OutputInterface $output,
-        private readonly E2EOutputStore $store,
     ) {}
+
+    /**
+     * Get the E2E output store from the Laravel container.
+     * We cannot use constructor injection because Pest creates plugins
+     * via its own container, which would create a separate E2EOutputStore instance.
+     */
+    private function store(): E2EOutputStore
+    {
+        return app(E2EOutputStore::class);
+    }
 
     /**
      * {@inheritdoc}
      */
     public function addOutput(int $exitCode): int
     {
-        $entries = $this->store->flush();
+        $entries = $this->store()->flush();
         $lines = [];
         $currentParent = null;
         $hasOutput = false;
@@ -80,7 +89,7 @@ final class Plugin implements AddsOutput, Terminable
      */
     public function terminate(): void
     {
-        $this->store->flush();
+        $this->store()->flush();
     }
 
     /**

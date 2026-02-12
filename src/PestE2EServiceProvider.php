@@ -6,6 +6,7 @@ namespace ValcuAndrei\PestE2E;
 
 use Illuminate\Support\ServiceProvider;
 use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
+use ValcuAndrei\PestE2E\Commands\PublishCommand;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
@@ -40,9 +41,17 @@ final class PestE2EServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../config/pest-e2e.php' => config_path('pest-e2e.php'),
             ], 'pest-e2e-config');
+
+            $this->publishes([
+                __DIR__.'/../resources/js/pest-e2e' => resource_path('js/pest-e2e'),
+            ], 'pest-e2e-js');
+
+            $this->commands([
+                PublishCommand::class,
+            ]);
         }
 
-        if ($this->app->environment('testing')) {
+        if (config()->boolean('pest-e2e.auth.route_enabled', false)) {
             $this->loadRoutesFrom(__DIR__.'/../routes/pest-e2e-testing.php');
         }
     }

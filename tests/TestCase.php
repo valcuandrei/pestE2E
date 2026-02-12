@@ -30,6 +30,9 @@ abstract class TestCase extends OrchestraTestCase
 
         // Helps avoid CSRF surprises for JSON posts in tests
         $app['config']->set('app.env', 'testing');
+
+        // Enable auth routes for testing
+        $app['config']->set('pest-e2e.auth.route_enabled', true);
     }
 
     protected function setUp(): void

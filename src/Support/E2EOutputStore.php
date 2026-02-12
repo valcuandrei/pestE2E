@@ -12,6 +12,16 @@ use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
  */
 final class E2EOutputStore
 {
+    /**
+     * Static storage to persist entries across Laravel container refreshes.
+     * This is needed because Pest's Plugin::addOutput() is called after all tests
+     * complete, at which point the original Laravel container (and its singletons)
+     * may have been destroyed and recreated.
+     *
+     * @var array<int, E2EOutputEntryDTO>
+     */
+    private static array $staticEntries = [];
+
     /** @var array<int, E2EOutputEntryDTO> */
     private array $entries = [];
 
@@ -32,7 +42,7 @@ final class E2EOutputStore
             $lines,
         ));
 
-        $this->entries[] = new E2EOutputEntryDTO(
+        $entry = new E2EOutputEntryDTO(
             type: $type,
             target: $target,
             runId: $runId,
@@ -41,6 +51,9 @@ final class E2EOutputStore
             stats: $stats,
             lines: $normalizedLines,
         );
+
+        $this->entries[] = $entry;
+        self::$staticEntries[] = $entry;
     }
 
     /**
@@ -56,7 +69,9 @@ final class E2EOutputStore
      */
     public function flush(): array
     {
-        $entries = $this->entries;
+        // Return from static storage to survive container refreshes
+        $entries = self::$staticEntries;
+        self::$staticEntries = [];
         $this->entries = [];
 
         return $entries;

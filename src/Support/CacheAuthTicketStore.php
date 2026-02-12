@@ -36,7 +36,10 @@ final class CacheAuthTicketStore implements AuthTicketStoreContract
             meta: $meta,
         );
 
-        $this->cache->put($this->key($ticket), $payload->toArray(), $ttlSeconds);
+        // $ttlSeconds is actually a unix timestamp of expiration
+        // Convert to seconds from now for cache TTL
+        $cacheTtl = max(1, $ttlSeconds - time());
+        $this->cache->put($this->key($ticket), $payload->toArray(), $cacheTtl);
     }
 
     /**

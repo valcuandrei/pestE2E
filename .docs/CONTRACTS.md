@@ -13,6 +13,14 @@ Injected into every Node process:
 - The report must conform to the `pest-e2e.v1` schema
 - File path must match target config
 
+### Playwright Integration
+
+When using the provided Playwright runner wrapper (`resources/js/pest-e2e/playwright/run.mjs`):
+- Playwright produces its native JSON report format
+- The wrapper automatically converts it to the canonical `pest-e2e.v1` schema
+- The canonical report is written to the configured report path
+- Raw Playwright report is preserved at `.pest-e2e/{runId}/playwright-report.json`
+
 ## call() contract
 - Node harness loads module + export
 - Context passed:

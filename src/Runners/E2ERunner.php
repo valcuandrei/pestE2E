@@ -51,19 +51,23 @@ final readonly class E2ERunner
         $plan = $this->planBuilder->build($context, $options);
         $result = $this->processRunner->run($plan);
 
-        if (! $result->isSuccessful()) {
-            throw new RuntimeException(
-                "E2E command failed (exit {$result->exitCode}).\n\n".
-                    "TARGET:\n{$target->name}\n\n".
-                    (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").
-                    "RUN_ID:\n{$runId}\n\n".
-                    "CMD:\n{$plan->command->command}\n\n".
-                    "CWD:\n{$plan->command->workingDirectory}\n\n".
-                    "STDOUT:\n{$result->stdout}\n\n".
-                    "STDERR:\n{$result->stderr}"
-            );
+        // Always try to read the JSON report first, even on non-zero exit.
+        // The run.mjs script always exits 0 and writes the canonical report
+        // so the PHP side can read test-level pass/fail details.
+        // Only fall back to a raw RuntimeException if the report is unreadable.
+        try {
+            return $this->reportReader->readForRun($context);
+        } catch (\Throwable $reportException) {
+            // Report could not be read – fall back to a raw error with process output
+            throw new RuntimeException("E2E command failed (exit {$result->exitCode}).\n\n".
+                "TARGET:\n{$target->name}\n\n".
+                (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").
+                "RUN_ID:\n{$runId}\n\n".
+                "CMD:\n{$plan->command->command}\n\n".
+                "CWD:\n{$plan->command->workingDirectory}\n\n".
+                "STDOUT:\n{$result->stdout}\n\n".
+                "STDERR:\n{$result->stderr}\n\n".
+                "REPORT ERROR:\n{$reportException->getMessage()}", $reportException->getCode(), $reportException);
         }
-
-        return $this->reportReader->readForRun($context);
     }
 }

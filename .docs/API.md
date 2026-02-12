@@ -11,9 +11,9 @@ Anything here is stable once implemented.
 e2e()->target('frontend', fn ($p) => $p
     ->dir('js')
     ->runner('playwright') // informational only
-    ->command('npx playwright test') // executed in the same environment as Pest
+    ->command('node resources/js/pest-e2e/playwright/run.mjs') // executed in the same environment as Pest
     ->filter('--grep') // (optional) flag for test filtering
-    ->report('json', 'storage/e2e/frontend/report.json')
+    ->report('json', '.pest-e2e/{runId}/report.json')
     ->env(['APP_URL' => 'http://localhost'])
     ->params(['baseUrl' => 'http://localhost'])
 );
@@ -56,7 +56,7 @@ e2e('frontend')
 
 **Requirements:**
 - Target must be configured with `->filter('--flag')` to support filtering
-- Filter patterns are passed directly to the JS runner (e.g., `npx playwright test --grep 'test name'`)
+- Filter patterns are passed through the runner wrapper to Playwright (e.g., `node resources/js/pest-e2e/playwright/run.mjs --grep 'test name'`)
 - Throws descriptive `RuntimeException` if `only()` or `runTest()` is called but filtering is not configured for the target
 - Filter flag and pattern are shell-escaped for security
 
@@ -90,9 +90,9 @@ The JS runner should POST the ticket to
 e2e()->target('frontend', fn ($p) => $p
     ->dir('frontend')
     ->runner('playwright')
-    ->command('npx playwright test')
+    ->command('node resources/js/pest-e2e/playwright/run.mjs')
     ->filter('--grep') // Enable test filtering
-    ->report('json', 'test-results/report.json')
+    ->report('json', '.pest-e2e/{runId}/report.json')
     ->env(['APP_URL' => config('app.url')])
 );
 

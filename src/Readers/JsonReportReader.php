@@ -26,7 +26,13 @@ final readonly class JsonReportReader
      */
     public function readForRun(RunContextDTO $context): JsonReportDTO
     {
-        $path = $context->target->reportPath;
+        $path = str_replace('{runId}', $context->runId, $context->target->reportPath);
+
+        // If path is relative, make it relative to the target directory
+        if (! str_starts_with($path, '/')) {
+            $path = $context->target->dir.'/'.$path;
+        }
+
         $report = $this->parser->parseFile($path);
 
         if ($report->target !== $context->target->name) {
