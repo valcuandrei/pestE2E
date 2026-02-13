@@ -22,7 +22,7 @@ it('flushes output store via the Pest plugin', function () {
     );
 
     $output = new BufferedOutput;
-    $plugin = new Plugin($output, $store);
+    $plugin = new Plugin($output);
     $exitCode = $plugin->addOutput(0);
     $rendered = $output->fetch();
 
@@ -81,7 +81,7 @@ it('groups entries by parent test name when flushing', function () {
     );
 
     $output = new BufferedOutput;
-    $plugin = new Plugin($output, $store);
+    $plugin = new Plugin($output);
     $plugin->addOutput(0);
     $rendered = $output->fetch();
     $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
@@ -139,7 +139,7 @@ it('prints a blank line between grouped and flat output when flushing', function
     );
 
     $output = new BufferedOutput;
-    $plugin = new Plugin($output, $store);
+    $plugin = new Plugin($output);
     $plugin->addOutput(0);
 
     $rendered = $output->fetch();

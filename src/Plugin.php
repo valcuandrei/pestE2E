@@ -20,7 +20,11 @@ final class Plugin implements AddsOutput, Terminable
      */
     public function __construct(
         private readonly OutputInterface $output,
-    ) {}
+    ) {
+        if (class_exists(\Pest\Collision\Events::class)) {
+            \Pest\Collision\Events::setOutput($output);
+        }
+    }
 
     /**
      * Get the E2E output store from the Laravel container.
