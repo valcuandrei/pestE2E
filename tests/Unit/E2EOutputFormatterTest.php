@@ -68,14 +68,26 @@ it('formats nested output with js test lines and errors', function () {
         extraLines: ['Extra failure'],
     );
 
+    $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
+    $childPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::CHILD_INDENT;
+    $errorPrefix = $childPrefix.E2EOutputFormatter::ERROR_INDENT;
+    $plainLines = array_map(static fn (string $line): string => normalizeFormattedLine($line), $lines);
+
     expect($lines[0])->toBe('Parent Test')
-        ->and($lines[1])->toContain('└─ E2E › frontend (runId run-nested)')
-        ->and($lines)->toContain('     ✓ ok')
-        ->and($lines)->toContain('     ✗ bad')
-        ->and($lines)->toContain('     - skip')
-        ->and($lines)->toContain('       Boom')
-        ->and($lines)->toContain('       Details')
-        ->and($lines)->toContain('     Extra failure')
-        ->and(implode("\n", $lines))->toContain('passed=1 failed=1 skipped=1')
-        ->and(implode("\n", $lines))->toContain('duration=15ms');
+        ->and($lines[1])->toContain($branchPrefix.'E2E › frontend (runId run-nested)')
+        ->and($plainLines)->toContain($childPrefix.'✓ ok')
+        ->and($plainLines)->toContain($childPrefix.'✗ bad')
+        ->and($plainLines)->toContain($childPrefix.'- skip')
+        ->and($plainLines)->toContain($errorPrefix.'Boom')
+        ->and($plainLines)->toContain($errorPrefix.'Details')
+        ->and($plainLines)->toContain($childPrefix.'Extra failure')
+        ->and(normalizeFormattedLine(implode("\n", $lines)))->toContain('passed=1 failed=1 skipped=1')
+        ->and(normalizeFormattedLine(implode("\n", $lines)))->toContain('duration=15ms');
 });
+
+function normalizeFormattedLine(string $line): string
+{
+    $withoutTags = strip_tags($line);
+
+    return (string) preg_replace('/\e\[[0-9;]*m/', '', $withoutTags);
+}

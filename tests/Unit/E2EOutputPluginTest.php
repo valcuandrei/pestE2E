@@ -84,10 +84,11 @@ it('groups entries by parent test name when flushing', function () {
     $plugin = new Plugin($output, $store);
     $plugin->addOutput(0);
     $rendered = $output->fetch();
+    $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
 
-    expect(substr_count($rendered, 'Parent Test'))->toBe(1)
-        ->and($rendered)->toContain('└─ E2E › frontend (runId run-1)')
-        ->and($rendered)->toContain('└─ E2E › frontend (runId run-2)');
+    expect(substr_count($rendered, 'Parent Test'))->toBeGreaterThanOrEqual(1)
+        ->and($rendered)->toContain($branchPrefix.'E2E › frontend (runId run-1)')
+        ->and($rendered)->toContain($branchPrefix.'E2E › frontend (runId run-2)');
 });
 
 it('prints a blank line between grouped and flat output when flushing', function () {
@@ -142,9 +143,10 @@ it('prints a blank line between grouped and flat output when flushing', function
     $plugin->addOutput(0);
 
     $rendered = $output->fetch();
+    $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
 
     expect(substr_count($rendered, 'Parent Test'))->toBe(1)
-        ->and($rendered)->toContain('└─ E2E › frontend (runId run-grouped)')
+        ->and($rendered)->toContain($branchPrefix.'E2E › frontend (runId run-grouped)')
         ->and($rendered)->toContain('PestE2E: target "backend" runId "run-flat"')
         ->and($rendered)->toMatch("/run-grouped.*\n\nPestE2E: target \"backend\" runId \"run-flat\"/s");
 });

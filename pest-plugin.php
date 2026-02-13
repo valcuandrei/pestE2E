@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/src/Collision/Events.php';
+
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\DTO\AuthTicketDTO;
 use ValcuAndrei\PestE2E\Plugin as PestE2EPlugin;
@@ -69,11 +71,9 @@ if (! function_exists('e2e')) {
      */
     function e2e(?string $target = null)
     {
-        // Ensure bindings are registered before resolving E2E
         $container = app();
 
         if (! $container->bound(\ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract::class)) {
-            // Try to register the full service provider if Laravel Application is available
             if (method_exists($container, 'register')) {
                 try {
                     $container->register(\ValcuAndrei\PestE2E\PestE2EServiceProvider::class);
@@ -82,10 +82,10 @@ if (! function_exists('e2e')) {
                 }
             }
 
-            // Ensure essential bindings exist (may already be set by the service provider)
             if (! $container->bound(\ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract::class)) {
                 $container->singleton(\ValcuAndrei\PestE2E\Registries\TargetRegistry::class);
                 $container->singleton(\ValcuAndrei\PestE2E\Support\E2EOutputStore::class);
+                $container->singleton(\ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext::class);
 
                 $container->bind(\ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract::class, \ValcuAndrei\PestE2E\Support\RandomRunIdGenerator::class);
                 $container->bind(\ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract::class, ArrayAuthTicketStore::class);
@@ -94,7 +94,6 @@ if (! function_exists('e2e')) {
                 $container->bind(\ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract::class, \ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction::class);
             }
 
-            // Bind the PublicApi E2E class with proper dependencies
             if (! $container->bound(E2E::class)) {
                 $container->bind(E2E::class, function ($container) {
                     return new E2E(
@@ -105,7 +104,6 @@ if (! function_exists('e2e')) {
             }
         }
 
-        // Always resolve fresh to ensure service provider bindings are available
         $api = app(E2E::class);
 
         return $target === null

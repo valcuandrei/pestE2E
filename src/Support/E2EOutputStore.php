@@ -22,6 +22,13 @@ final class E2EOutputStore
      */
     private static array $staticEntries = [];
 
+    /**
+     * Per-test storage for inline output (keyed by PHPUnit test ID).
+     *
+     * @var array<string, array<int, E2EOutputEntryDTO>>
+     */
+    private static array $perTestEntries = [];
+
     /** @var array<int, E2EOutputEntryDTO> */
     private array $entries = [];
 
@@ -57,6 +64,46 @@ final class E2EOutputStore
     }
 
     /**
+     * Store an E2E output entry for a specific PHPUnit test ID.
+     */
+    public function putForTest(string $testId, E2EOutputEntryDTO $entry): void
+    {
+        if (! isset(self::$perTestEntries[$testId])) {
+            self::$perTestEntries[$testId] = [];
+        }
+
+        self::$perTestEntries[$testId][] = $entry;
+    }
+
+    /**
+     * Get all E2E output entries for a specific PHPUnit test ID.
+     *
+     * @return array<int, E2EOutputEntryDTO>
+     */
+    public function getForTest(string $testId): array
+    {
+        return self::$perTestEntries[$testId] ?? [];
+    }
+
+    /**
+     * Get all per-test entries.
+     *
+     * @return array<string, array<int, E2EOutputEntryDTO>>
+     */
+    public function getAllPerTestEntries(): array
+    {
+        return self::$perTestEntries;
+    }
+
+    /**
+     * Remove all entries for a specific test ID (for cleanup).
+     */
+    public function removeForTest(string $testId): void
+    {
+        unset(self::$perTestEntries[$testId]);
+    }
+
+    /**
      * @return array<int, E2EOutputEntryDTO>
      */
     public function all(): array
@@ -75,6 +122,14 @@ final class E2EOutputStore
         $this->entries = [];
 
         return $entries;
+    }
+
+    /**
+     * Clear all per-test entries (for test isolation).
+     */
+    public function flushPerTestEntries(): void
+    {
+        self::$perTestEntries = [];
     }
 
     public function isEmpty(): bool

@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\Terminable;
 use Symfony\Component\Console\Output\OutputInterface;
+use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
 /**
@@ -36,49 +37,85 @@ final class Plugin implements AddsOutput, Terminable
      */
     public function addOutput(int $exitCode): int
     {
-        $entries = $this->store()->flush();
-        $lines = [];
-        $currentParent = null;
-        $hasOutput = false;
+        $store = $this->store();
 
-        foreach ($entries as $entry) {
-            $grouped = $this->splitGroupedLines($entry->lines);
+        // Print per-test entries inline (without repeating parent test line)
+        $perTestEntries = $store->getAllPerTestEntries();
 
-            if ($grouped !== null) {
-                [$parent, $childLines] = $grouped;
+        if ($perTestEntries !== []) {
+            $lines = [];
 
-                if ($currentParent !== $parent) {
-                    if ($hasOutput) {
-                        $lines[] = '';
+            foreach ($perTestEntries as $entries) {
+                foreach ($entries as $entry) {
+                    $storedLines = $entry->lines;
+                    $counter = count($storedLines);
+
+                    if ($counter < 2) {
+                        continue;
                     }
 
-                    $lines[] = $parent;
-                    $currentParent = $parent;
+                    for ($i = 1; $i < $counter; $i++) {
+                        $lines[] = $storedLines[$i];
+                    }
+
+                    $lines[] = '';
+                }
+            }
+
+            if ($lines !== []) {
+                $this->output->writeln($lines);
+            }
+        }
+
+        $store->flushPerTestEntries();
+
+        // Print any orphaned entries (fallback for entries not associated with a test)
+        $entries = $store->flush();
+
+        if ($entries !== []) {
+            $lines = [];
+            $currentParent = null;
+            $hasOutput = false;
+
+            foreach ($entries as $entry) {
+                $grouped = $this->splitGroupedLines($entry->lines);
+
+                if ($grouped !== null) {
+                    [$parent, $childLines] = $grouped;
+
+                    if ($currentParent !== $parent) {
+                        if ($hasOutput) {
+                            $lines[] = '';
+                        }
+
+                        $lines[] = $parent;
+                        $currentParent = $parent;
+                    }
+
+                    foreach ($childLines as $line) {
+                        $lines[] = $line;
+                    }
+
+                    $hasOutput = true;
+
+                    continue;
                 }
 
-                foreach ($childLines as $line) {
+                if ($hasOutput) {
+                    $lines[] = '';
+                }
+
+                foreach ($entry->lines as $line) {
                     $lines[] = $line;
                 }
 
+                $currentParent = null;
                 $hasOutput = true;
-
-                continue;
             }
 
-            if ($hasOutput) {
-                $lines[] = '';
+            if ($lines !== []) {
+                $this->output->writeln($lines);
             }
-
-            foreach ($entry->lines as $line) {
-                $lines[] = $line;
-            }
-
-            $currentParent = null;
-            $hasOutput = true;
-        }
-
-        if ($lines !== []) {
-            $this->output->writeln($lines);
         }
 
         return $exitCode;
@@ -105,7 +142,7 @@ final class Plugin implements AddsOutput, Terminable
         $parent = trim($lines[0]);
         $firstChild = $lines[1] ?? '';
 
-        if ($parent === '' || ! str_starts_with($firstChild, '  └─ ')) {
+        if ($parent === '' || ! str_starts_with($firstChild, E2EOutputFormatter::BRANCH_PREFIX)) {
             return null;
         }
 

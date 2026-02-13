@@ -8,6 +8,7 @@ use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
@@ -45,12 +46,14 @@ it('nests e2e output under the current test name', function () {
         $entries = app(E2EOutputStore::class)->all();
         $lines = $entries[0]->lines;
         $text = implode("\n", $lines);
+        $plainText = normalizeFormattedOutput($text);
+        $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
 
         expect($entries)->toHaveCount(1)
             ->and($lines[0])->toBe($testName)
-            ->and($lines[1])->toContain('  └─ E2E › '.$reportDTO->target.' (runId '.$reportDTO->runId.')')
-            ->and($text)->toContain('✓ '.$reportDTO->getPassedTests()[0]->name)
-            ->and($text)->toContain('passed=1 failed=0 skipped=0');
+            ->and($lines[1])->toContain($branchPrefix.'E2E › '.$reportDTO->target.' (runId '.$reportDTO->runId.')')
+            ->and($plainText)->toContain('✓ '.$reportDTO->getPassedTests()[0]->name)
+            ->and($plainText)->toContain('passed=1 failed=0 skipped=0');
     } finally {
         @unlink($reportPath);
     }
@@ -83,7 +86,7 @@ it('stores a passed run summary when the target succeeds', function () {
         e2e($reportDTO->target)->run();
 
         $entries = app(E2EOutputStore::class)->all();
-        $text = implode("\n", $entries[0]->lines);
+        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
         expect($entries)->toHaveCount(1)
             ->and($entries[0]->ok)->toBeTrue()
@@ -124,7 +127,7 @@ it('stores a failed run summary and rethrows on failures', function () {
         expect(fn () => e2e($reportDTO->target)->run())->toThrow(\RuntimeException::class);
 
         $entries = app(E2EOutputStore::class)->all();
-        $text = implode("\n", $entries[0]->lines);
+        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
         expect($entries)->toHaveCount(1)
             ->and($entries[0]->ok)->toBeFalse()
@@ -168,7 +171,7 @@ it('runs filtered test with only() method', function () {
         e2e($reportDTO->target)->only('can checkout')->run();
 
         $entries = app(E2EOutputStore::class)->all();
-        $text = implode("\n", $entries[0]->lines);
+        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
         expect($entries)->toHaveCount(1)
             ->and($entries[0]->ok)->toBeTrue()
@@ -211,7 +214,7 @@ it('fails when using only() with failed test', function () {
             ->toThrow(RuntimeException::class);
 
         $entries = app(E2EOutputStore::class)->all();
-        $text = implode("\n", $entries[0]->lines);
+        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
         expect($entries)->toHaveCount(1)
             ->and($entries[0]->ok)->toBeFalse()
@@ -252,7 +255,7 @@ it('runTest() is equivalent to only()->run()', function () {
         e2e($reportDTO->target)->runTest('can checkout');
 
         $entries = app(E2EOutputStore::class)->all();
-        $text = implode("\n", $entries[0]->lines);
+        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
         expect($entries)->toHaveCount(1)
             ->and($entries[0]->ok)->toBeTrue()
@@ -270,4 +273,11 @@ function getReportCommand(string $reportPath, string $reportB64): string
         .', base64_decode('
         .var_export($reportB64, true)
         .'));"';
+}
+
+function normalizeFormattedOutput(string $text): string
+{
+    $withoutTags = strip_tags($text);
+
+    return (string) preg_replace('/\e\[[0-9;]*m/', '', $withoutTags);
 }

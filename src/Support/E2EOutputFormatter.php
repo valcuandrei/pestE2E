@@ -13,13 +13,13 @@ use ValcuAndrei\PestE2E\Enums\TestStatusType;
  */
 final class E2EOutputFormatter
 {
-    private const BASE_INDENT = '  ';
+    public const BASE_INDENT = '      ';
 
-    private const BRANCH_PREFIX = '└─ ';
+    public const BRANCH_PREFIX = '└─ ';
 
-    private const CHILD_INDENT = '   ';
+    public const CHILD_INDENT = '   ';
 
-    private const ERROR_INDENT = '  ';
+    public const ERROR_INDENT = '  ';
 
     /**
      * @param  array<int, JsonReportTestDTO>  $tests
@@ -148,18 +148,12 @@ final class E2EOutputFormatter
         $lines = [];
 
         foreach ($tests as $test) {
-            $prefix = match ($test->status) {
-                TestStatusType::PASSED => '✓',
-                TestStatusType::FAILED => '✗',
-                TestStatusType::SKIPPED => '-',
-            };
-
-            $lines[] = $this->childIndent().$prefix.' '.$test->name;
+            $lines[] = $this->childIndent().$test->status->getSymbol().' <fg=gray>'.$test->name.'</fg=gray>';
 
             if ($test->status === TestStatusType::FAILED && $test->error?->message !== null) {
                 $lines = array_merge(
                     $lines,
-                    $this->indentLines($this->splitLines($test->error->message), $this->errorIndent())
+                    $this->indentLines($this->splitLines('<fg=red>'.$test->error->message.'</fg=red>'), $this->errorIndent())
                 );
             }
         }

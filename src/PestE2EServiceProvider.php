@@ -14,6 +14,7 @@ use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Support\CacheAuthTicketStore;
+use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Support\LaravelAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
@@ -25,6 +26,7 @@ final class PestE2EServiceProvider extends ServiceProvider
     {
         $this->app->singleton(TargetRegistry::class);
         $this->app->singleton(E2EOutputStore::class);
+        $this->app->singleton(CurrentPhpunitTestContext::class);
 
         $this->mergeConfigFrom(__DIR__.'/../config/pest-e2e.php', 'pest-e2e');
 

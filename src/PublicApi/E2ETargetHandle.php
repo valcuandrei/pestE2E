@@ -20,6 +20,7 @@ use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Enums\AuthModeType;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
+use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
@@ -45,6 +46,7 @@ final class E2ETargetHandle
         private readonly ProcessRunner $processRunner,
         private readonly E2EOutputFormatter $outputFormatter,
         private readonly E2EOutputStore $outputStore,
+        private readonly CurrentPhpunitTestContext $testContext,
     ) {}
 
     /**
@@ -242,15 +244,33 @@ final class E2ETargetHandle
             extraLines: $extraLines,
         );
 
-        $this->outputStore->add(
-            lines: $lines,
-            type: 'run',
-            target: $this->target,
-            runId: $runId,
-            ok: $ok,
-            durationSeconds: $durationSeconds,
-            stats: $report?->stats,
-        );
+        // Store for inline output (keyed by PHPUnit test ID)
+        $currentTestId = $this->testContext->get();
+
+        if ($currentTestId !== null) {
+            $entry = new \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO(
+                type: 'run',
+                target: $this->target,
+                runId: $runId,
+                ok: $ok,
+                durationSeconds: $durationSeconds,
+                stats: $report?->stats,
+                lines: $lines,
+            );
+
+            $this->outputStore->putForTest($currentTestId, $entry);
+        } else {
+            // Fallback to old behavior if no test context (shouldn't happen in normal flow)
+            $this->outputStore->add(
+                lines: $lines,
+                type: 'run',
+                target: $this->target,
+                runId: $runId,
+                ok: $ok,
+                durationSeconds: $durationSeconds,
+                stats: $report?->stats,
+            );
+        }
 
         if ($thrown instanceof \RuntimeException) {
             throw $thrown;
@@ -371,15 +391,33 @@ final class E2ETargetHandle
                 extraLines: [],
             );
 
-            $this->outputStore->add(
-                lines: $lines,
-                type: 'call',
-                target: $this->target,
-                runId: $runId,
-                ok: true,
-                durationSeconds: $durationSeconds,
-                stats: null,
-            );
+            // Store for inline output (keyed by PHPUnit test ID)
+            $currentTestId = $this->testContext->get();
+
+            if ($currentTestId !== null) {
+                $entry = new \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO(
+                    type: 'call',
+                    target: $this->target,
+                    runId: $runId,
+                    ok: true,
+                    durationSeconds: $durationSeconds,
+                    stats: null,
+                    lines: $lines,
+                );
+
+                $this->outputStore->putForTest($currentTestId, $entry);
+            } else {
+                // Fallback to old behavior
+                $this->outputStore->add(
+                    lines: $lines,
+                    type: 'call',
+                    target: $this->target,
+                    runId: $runId,
+                    ok: true,
+                    durationSeconds: $durationSeconds,
+                    stats: null,
+                );
+            }
         } catch (RuntimeException $exception) {
             $durationSeconds = microtime(true) - $startedAt;
             $lines = $this->buildCallLines(
@@ -392,15 +430,33 @@ final class E2ETargetHandle
                 extraLines: $this->exceptionLines($exception),
             );
 
-            $this->outputStore->add(
-                lines: $lines,
-                type: 'call',
-                target: $this->target,
-                runId: $runId,
-                ok: false,
-                durationSeconds: $durationSeconds,
-                stats: null,
-            );
+            // Store for inline output (keyed by PHPUnit test ID)
+            $currentTestId = $this->testContext->get();
+
+            if ($currentTestId !== null) {
+                $entry = new \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO(
+                    type: 'call',
+                    target: $this->target,
+                    runId: $runId,
+                    ok: false,
+                    durationSeconds: $durationSeconds,
+                    stats: null,
+                    lines: $lines,
+                );
+
+                $this->outputStore->putForTest($currentTestId, $entry);
+            } else {
+                // Fallback to old behavior
+                $this->outputStore->add(
+                    lines: $lines,
+                    type: 'call',
+                    target: $this->target,
+                    runId: $runId,
+                    ok: false,
+                    durationSeconds: $durationSeconds,
+                    stats: null,
+                );
+            }
 
             throw $exception;
         } finally {
