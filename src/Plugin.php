@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E;
 
+use Pest\Collision\Events;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\Terminable;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -21,8 +22,8 @@ final class Plugin implements AddsOutput, Terminable
     public function __construct(
         private readonly OutputInterface $output,
     ) {
-        if (class_exists(\Pest\Collision\Events::class)) {
-            \Pest\Collision\Events::setOutput($output);
+        if (class_exists(Events::class)) {
+            Events::setOutput($output);
         }
     }
 

@@ -9,6 +9,7 @@ use Pest\TestSuite;
 use RuntimeException;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
+use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
@@ -207,7 +208,6 @@ final class E2ETargetHandle
         $report = null;
         $ok = false;
         $thrown = null;
-        $extraLines = [];
 
         try {
             $report = $this->root->runner()->run(
@@ -223,32 +223,30 @@ final class E2ETargetHandle
 
             if (! $ok) {
                 $thrown = $this->reportFailureException($report, $runId);
-                $extraLines = $this->exceptionLines($thrown);
             }
         } catch (RuntimeException $e) {
             $ok = false;
             $thrown = $e;
-            $extraLines = $this->exceptionLines($e);
         }
 
         $durationSeconds = microtime(true) - $startedAt;
 
         $lines = $this->buildRunLines(
-            target: $report instanceof \ValcuAndrei\PestE2E\DTO\JsonReportDTO ? $report->target : $this->target,
+            target: $report instanceof JsonReportDTO ? $report->target : $this->target,
             runId: $runId,
             ok: $ok,
             durationSeconds: $durationSeconds,
             stats: $report?->stats,
-            tests: $report instanceof \ValcuAndrei\PestE2E\DTO\JsonReportDTO ? $report->tests : [],
+            tests: $report instanceof JsonReportDTO ? $report->tests : [],
             parentTestName: $parentTestName,
-            extraLines: $extraLines,
+            extraLines: [],
         );
 
         // Store for inline output (keyed by PHPUnit test ID)
         $currentTestId = $this->testContext->get();
 
         if ($currentTestId !== null) {
-            $entry = new \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO(
+            $entry = new E2EOutputEntryDTO(
                 type: 'run',
                 target: $this->target,
                 runId: $runId,
@@ -395,7 +393,7 @@ final class E2ETargetHandle
             $currentTestId = $this->testContext->get();
 
             if ($currentTestId !== null) {
-                $entry = new \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO(
+                $entry = new E2EOutputEntryDTO(
                     type: 'call',
                     target: $this->target,
                     runId: $runId,
@@ -434,7 +432,7 @@ final class E2ETargetHandle
             $currentTestId = $this->testContext->get();
 
             if ($currentTestId !== null) {
-                $entry = new \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO(
+                $entry = new E2EOutputEntryDTO(
                     type: 'call',
                     target: $this->target,
                     runId: $runId,
@@ -677,14 +675,12 @@ final class E2ETargetHandle
         $lines = [];
 
         foreach ($report->getFailedTests() as $test) {
-            $lines[] = "- {$test->name}".($test->file ? " ({$test->file})" : '');
-            if ($test->error?->message) {
-                $lines[] = "  {$test->error->message}";
-            }
+            $lines[] = $test->name.($test->file ? ' ['.$test->file.']' : '');
         }
 
         return new RuntimeException(
-            "E2E failures for {$this->target} ({$runId}):\n".implode("\n", $lines)
+            "E2E failures for {$this->target} ({$runId}):\n- ".implode("\n- ", $lines)
+                ."\n(See inline E2E output above for full details.)"
         );
     }
 }

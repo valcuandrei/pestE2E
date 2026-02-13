@@ -4,11 +4,23 @@ declare(strict_types=1);
 
 require_once __DIR__.'/src/Collision/Events.php';
 
+use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
+use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
+use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
+use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
+use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\AuthTicketDTO;
+use ValcuAndrei\PestE2E\PestE2EServiceProvider;
 use ValcuAndrei\PestE2E\Plugin as PestE2EPlugin;
 use ValcuAndrei\PestE2E\PublicApi\E2E;
 use ValcuAndrei\PestE2E\PublicApi\E2ETargetHandle;
+use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
+use ValcuAndrei\PestE2E\Support\E2EOutputStore;
+use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
+use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
+use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 
 /**
  * Simple array-based auth ticket store for testing
@@ -73,31 +85,31 @@ if (! function_exists('e2e')) {
     {
         $container = app();
 
-        if (! $container->bound(\ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract::class)) {
+        if (! $container->bound(RunIdGeneratorContract::class)) {
             if (method_exists($container, 'register')) {
                 try {
-                    $container->register(\ValcuAndrei\PestE2E\PestE2EServiceProvider::class);
-                } catch (\Throwable) {
+                    $container->register(PestE2EServiceProvider::class);
+                } catch (\Throwable $e) {
                     // Fall back to manual bindings if the service provider can't boot
                 }
             }
 
-            if (! $container->bound(\ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract::class)) {
-                $container->singleton(\ValcuAndrei\PestE2E\Registries\TargetRegistry::class);
-                $container->singleton(\ValcuAndrei\PestE2E\Support\E2EOutputStore::class);
-                $container->singleton(\ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext::class);
+            if (! $container->bound(RunIdGeneratorContract::class)) {
+                $container->singleton(TargetRegistry::class);
+                $container->singleton(E2EOutputStore::class);
+                $container->singleton(CurrentPhpunitTestContext::class);
 
-                $container->bind(\ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract::class, \ValcuAndrei\PestE2E\Support\RandomRunIdGenerator::class);
-                $container->bind(\ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract::class, ArrayAuthTicketStore::class);
-                $container->bind(\ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract::class, \ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer::class);
-                $container->bind(\ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract::class, \ValcuAndrei\PestE2E\Support\TempParamsFileWriter::class);
-                $container->bind(\ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract::class, \ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction::class);
+                $container->bind(RunIdGeneratorContract::class, RandomRunIdGenerator::class);
+                $container->bind(AuthTicketStoreContract::class, ArrayAuthTicketStore::class);
+                $container->bind(AuthTicketIssuerContract::class, NullAuthTicketIssuer::class);
+                $container->bind(ParamsFileWriterContract::class, TempParamsFileWriter::class);
+                $container->bind(E2EAuthActionContract::class, DefaultE2EAuthAction::class);
             }
 
             if (! $container->bound(E2E::class)) {
                 $container->bind(E2E::class, function ($container) {
                     return new E2E(
-                        $container->make(\ValcuAndrei\PestE2E\E2E::class),
+                        $container->make(E2E::class),
                         $container
                     );
                 });
