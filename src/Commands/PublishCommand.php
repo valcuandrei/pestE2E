@@ -16,7 +16,7 @@ final class PublishCommand extends Command
     /**
      * The console command description.
      */
-    protected $description = 'Publish Pest E2E JavaScript assets to resources/js/pest-e2e';
+    protected $description = 'Publish Pest E2E assets (JS harness + E2ETestCase stub)';
 
     /**
      * Execute the console command.
@@ -31,11 +31,20 @@ final class PublishCommand extends Command
             $options['--force'] = true;
         }
 
-        $result = $this->call('vendor:publish', array_merge([
+        $jsResult = $this->call('vendor:publish', array_merge([
             '--tag' => 'pest-e2e-js',
         ], $options));
+        $testCaseResult = $this->call('vendor:publish', array_merge([
+            '--tag' => 'pest-e2e-test-case',
+        ], $options));
 
-        if ($result === 0) {
+        if ($jsResult !== self::SUCCESS && $testCaseResult !== self::SUCCESS) {
+            $this->error('Failed to publish assets');
+
+            return self::FAILURE;
+        }
+
+        if ($jsResult === self::SUCCESS) {
             $this->line('Next steps:');
             $this->line('1. Import globalSetup in your Playwright config:');
             $this->line("   <fg=yellow>import { globalSetup } from './resources/js/pest-e2e/playwright.mjs';</>");
@@ -49,12 +58,17 @@ final class PublishCommand extends Command
             $this->line('');
             $this->line('4. Sanctum mode:');
             $this->line("   <fg=yellow>use: { extraHTTPHeaders: process.env.PEST_E2E_AUTH_TOKEN ? { Authorization: 'Bearer ' + process.env.PEST_E2E_AUTH_TOKEN } : {} }</>");
-
-            return self::SUCCESS;
         }
 
-        $this->error('Failed to publish assets');
+        if ($testCaseResult === self::SUCCESS) {
+            $this->line('');
+            $this->line('5. Register E2ETestCase in your Pest configuration:');
+            $this->line("   <fg=yellow>pest()->extend(Tests\E2ETestCase::class)->use(Illuminate\Foundation\Testing\DatabaseMigrations::class)->in('Browser');</>");
+            $this->line('');
+            $this->line('6. Add the Browser test suite to your PHPUnit configuration:');
+            $this->line("   <fg=yellow><testsuite name='Browser'><directory>tests/Browser</directory></testsuite></>");
+        }
 
-        return self::FAILURE;
+        return self::SUCCESS;
     }
 }

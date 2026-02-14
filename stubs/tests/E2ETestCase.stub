@@ -1,0 +1,33 @@
+<?php
+
+namespace Tests;
+
+abstract class E2ETestCase extends TestCase
+{
+    /**
+     * Whether the e2e targets have been registered.
+     */
+    private static bool $e2eTargetsRegistered = false;
+
+    /**
+     * Register e2e targets.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (self::$e2eTargetsRegistered) {
+            return;
+        }
+
+        self::$e2eTargetsRegistered = true;
+
+        e2e()->target('frontend', fn ($p) => $p
+            ->dir('resources/js/e2e')
+            ->command('node ../../../resources/js/pest-e2e/playwright/run.mjs')
+            ->report('json', '.pest-e2e/{runId}/report.json')
+            ->env(['APP_URL' => 'http://localhost'])
+            ->params(['baseUrl' => 'http://localhost'])
+        );
+    }
+}

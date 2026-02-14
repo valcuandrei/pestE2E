@@ -48,6 +48,10 @@ final class PestE2EServiceProvider extends ServiceProvider
                 __DIR__.'/../resources/js/pest-e2e' => resource_path('js/pest-e2e'),
             ], 'pest-e2e-js');
 
+            $this->publishes([
+                __DIR__.'/../stubs/tests/E2ETestCase.stub' => base_path('tests/E2ETestCase.php'),
+            ], 'pest-e2e-test-case');
+
             $this->commands([
                 PublishCommand::class,
             ]);
