@@ -41,7 +41,6 @@ JS;
     try {
         e2e()->target('frontend', fn ($p) => $p
             ->dir(dirname($modulePath))
-            ->runner('node')
             ->command('php -r "exit(0);"')
             ->report('json', $reportPath)
         );

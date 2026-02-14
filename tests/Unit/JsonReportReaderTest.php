@@ -25,7 +25,6 @@ it('reads and validates report for run', function () {
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        runner: 'Playwright',
         command: 'npx playwright test',
         reportType: 'json',
         reportPath: $tmp,
@@ -51,7 +50,6 @@ it('throws when report target mismatches', function () {
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        runner: 'Playwright',
         command: 'npx playwright test',
         reportType: 'json',
         reportPath: $tmp,
@@ -76,7 +74,6 @@ it('throws when report runId mismatches', function () {
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        runner: 'Playwright',
         command: 'npx playwright test',
         reportType: 'json',
         reportPath: $tmp,

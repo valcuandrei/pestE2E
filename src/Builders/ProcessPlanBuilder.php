@@ -48,15 +48,6 @@ final readonly class ProcessPlanBuilder
     {
         $options ??= new ProcessOptionsDTO;
         $command = $context->target->command;
-        $filter = $context->testFilter !== null ? trim($context->testFilter) : null;
-
-        if (! in_array($filter, [null, '', '0'], true)) {
-            if ($context->target->filterFlag === null) {
-                throw new RuntimeException("Target \"{$context->target->name}\" does not support filtering. Configure it with ->filter('--flag').");
-            }
-
-            $command = $command.' '.$context->target->filterFlag.' '.escapeshellarg($filter);
-        }
 
         $commandDto = new ProcessCommandDTO(
             command: $command,

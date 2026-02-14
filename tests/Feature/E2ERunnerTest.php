@@ -39,7 +39,6 @@ it('runs a target command and ingests the json report', function () {
     $target = new TargetConfigDTO(
         name: $targetName,
         dir: getcwd(),
-        runner: 'Playwright',
         command: $command,
         reportType: 'json',
         reportPath: $reportPath,

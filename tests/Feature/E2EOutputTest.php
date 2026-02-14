@@ -27,14 +27,12 @@ it('nests e2e output under the current test name', function () {
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        runner: 'Playwright',
         command: getReportCommand($reportPath, $reportB64),
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
-        filterFlag: null,
     );
 
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
@@ -69,14 +67,12 @@ it('stores a passed run summary when the target succeeds', function () {
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        runner: 'Playwright',
         command: getReportCommand($reportPath, $reportB64),
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
-        filterFlag: null,
     );
 
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
@@ -110,14 +106,12 @@ it('stores a failed run summary and rethrows on failures', function () {
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        runner: 'Playwright',
         command: getReportCommand($reportPath, $reportB64),
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
-        filterFlag: null,
     );
 
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
@@ -154,14 +148,12 @@ it('runs filtered test with only() method', function () {
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        runner: 'Playwright',
         command: 'echo "Mock test runner with filter" && exit 0',
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
-        filterFlag: '--grep',
     );
 
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
@@ -196,14 +188,12 @@ it('fails when using only() with failed test', function () {
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        runner: 'Playwright',
         command: 'echo "Mock test runner with filter" && exit 0',
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
-        filterFlag: '--grep',
     );
 
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
@@ -238,14 +228,12 @@ it('runTest() is equivalent to only()->run()', function () {
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        runner: 'Playwright',
         command: 'echo "Mock test runner with filter" && exit 0',
         reportType: 'json',
         reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
-        filterFlag: '--grep',
     );
 
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));

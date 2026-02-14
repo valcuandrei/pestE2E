@@ -13,8 +13,6 @@ final class TargetConfigBuilder
 {
     private string $dir = '.';
 
-    private string $runner = '';
-
     private string $command = '';
 
     private string $reportType = 'json';
@@ -41,19 +39,6 @@ final class TargetConfigBuilder
     public function dir(string $dir): self
     {
         $this->dir = $dir;
-
-        return $this;
-    }
-
-    /**
-     * Set the runner of the target.
-     *
-     *
-     * @return $this
-     */
-    public function runner(string $runner): self
-    {
-        $this->runner = $runner;
 
         return $this;
     }
@@ -122,7 +107,6 @@ final class TargetConfigBuilder
         return new TargetConfigDTO(
             name: $this->name,
             dir: $this->dir,
-            runner: $this->runner,
             command: $this->command,
             reportType: $this->reportType,
             reportPath: $this->reportPath,

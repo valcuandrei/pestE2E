@@ -42,7 +42,6 @@ JS;
     try {
         e2e()->target('frontend', fn ($p) => $p
             ->dir(dirname($modulePath))
-            ->runner('node')
             ->command('php -r "exit(0);"')
             ->report('json', $reportPath)
             ->env(['FROM_TARGET' => '1'])
@@ -82,7 +81,6 @@ it('surfaces a readable error when the export is missing', function () {
     try {
         e2e()->target('frontend', fn ($p) => $p
             ->dir(dirname($modulePath))
-            ->runner('node')
             ->command('php -r "exit(0);"')
             ->report('json', $reportPath)
         );

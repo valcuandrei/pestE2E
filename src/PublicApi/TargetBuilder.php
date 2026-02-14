@@ -14,8 +14,6 @@ final class TargetBuilder
 {
     private ?string $dir = null;
 
-    private ?string $runner = null;
-
     private ?string $command = null;
 
     private ?string $reportType = null;
@@ -28,8 +26,6 @@ final class TargetBuilder
     /** @var array<string,mixed> */
     private array $params = [];
 
-    private ?string $filterFlag = null;
-
     public function __construct(
         private readonly string $name,
     ) {}
@@ -40,16 +36,6 @@ final class TargetBuilder
     public function dir(string $dir): self
     {
         $this->dir = $dir;
-
-        return $this;
-    }
-
-    /**
-     * Set the runner of the target.
-     */
-    public function runner(string $runner): self
-    {
-        $this->runner = $runner;
 
         return $this;
     }
@@ -100,16 +86,6 @@ final class TargetBuilder
     }
 
     /**
-     * Set the filter flag of the target.
-     */
-    public function filter(string $flag): self
-    {
-        $this->filterFlag = $flag;
-
-        return $this;
-    }
-
-    /**
      * Convert the target builder to a TargetConfigDTO instance.
      *
      *
@@ -132,14 +108,11 @@ final class TargetBuilder
         return new TargetConfigDTO(
             name: $this->name,
             dir: $this->dir,
-            runner: $this->runner ?? 'unknown',
             command: $this->command,
             reportType: $this->reportType,
             reportPath: $this->reportPath,
             env: $this->env,
             params: $this->params,
-            artifactsDir: null,
-            filterFlag: $this->filterFlag,
         );
     }
 }
