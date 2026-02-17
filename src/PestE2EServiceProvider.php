@@ -6,7 +6,7 @@ namespace ValcuAndrei\PestE2E;
 
 use Illuminate\Support\ServiceProvider;
 use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
-use ValcuAndrei\PestE2E\Commands\PublishCommand;
+use ValcuAndrei\PestE2E\Commands\InstallCommand;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
@@ -45,15 +45,20 @@ final class PestE2EServiceProvider extends ServiceProvider
             ], 'pest-e2e-config');
 
             $this->publishes([
-                __DIR__.'/../resources/js/pest-e2e' => resource_path('js/pest-e2e'),
-            ], 'pest-e2e-js');
+                __DIR__.'/../resources/js/pest-e2e/core.mjs' => resource_path('js/pest-e2e/core.mjs'),
+            ], 'pest-e2e-js-harness');
+
+            $this->publishes([
+                __DIR__.'/../resources/js/pest-e2e/playwright.mjs' => resource_path('js/pest-e2e/playwright.mjs'),
+                __DIR__.'/../resources/js/pest-e2e/playwright' => resource_path('js/pest-e2e/playwright'),
+            ], 'pest-e2e-js-playwright');
 
             $this->publishes([
                 __DIR__.'/../stubs/tests/E2ETestCase.stub' => base_path('tests/E2ETestCase.php'),
             ], 'pest-e2e-test-case');
 
             $this->commands([
-                PublishCommand::class,
+                InstallCommand::class,
             ]);
         }
 
