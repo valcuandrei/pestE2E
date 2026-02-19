@@ -50,11 +50,23 @@ function createPestPhp(string $dir, string $content = "<?php\n\ndeclare(strict_t
     file_put_contents($dir.'/tests/Pest.php', $content);
 }
 
-it('fails when tests/Pest.php is missing', function (): void {
-    $_SERVER['argv'] = ['artisan', 'pest-e2e:install', '--no'];
+function runInstall(array $args = [], array $argvFlags = [], ?BufferedOutput $output = null): int
+{
+    $_SERVER['argv'] = array_merge(['artisan', 'pest-e2e:install'], $argvFlags);
 
+    $args = array_merge(['--no-interaction' => true], $args);
+
+    return Artisan::call('pest-e2e:install', $args, $output ?? new BufferedOutput);
+}
+
+it('fails when tests/Pest.php is missing', function (): void {
     $output = new BufferedOutput;
-    $exitCode = Artisan::call('pest-e2e:install', ['--no' => true], $output);
+
+    $exitCode = runInstall(
+        args: [],
+        argvFlags: ['--no-interaction'],
+        output: $output
+    );
 
     expect($exitCode)->toBe(InstallCommand::FAILURE)
         ->and($output->fetch())->toContain('Pest config file not found');
@@ -62,9 +74,11 @@ it('fails when tests/Pest.php is missing', function (): void {
 
 it('updates Pest.php and publishes when --yes and Playwright not installed', function (): void {
     createPestPhp($this->tempDir);
-    $_SERVER['argv'] = ['artisan', 'pest-e2e:install', '--yes'];
 
-    $exitCode = Artisan::call('pest-e2e:install', ['--yes' => true]);
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
         ->and($this->mockJs->installCallCount)->toBe(1);
@@ -83,9 +97,11 @@ it('updates Pest.php and publishes when --yes and Playwright not installed', fun
 it('does not modify files or publish when --no', function (): void {
     createPestPhp($this->tempDir);
     $original = file_get_contents($this->tempDir.'/tests/Pest.php');
-    $_SERVER['argv'] = ['artisan', 'pest-e2e:install', '--no'];
 
-    $exitCode = Artisan::call('pest-e2e:install', ['--no' => true]);
+    $exitCode = runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction']
+    );
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
         ->and($this->fakePublish->calls)->toBeEmpty()
@@ -95,10 +111,12 @@ it('does not modify files or publish when --no', function (): void {
 
 it('does not call installJsPackage when Playwright already installed', function (): void {
     createPestPhp($this->tempDir);
-    $_SERVER['argv'] = ['artisan', 'pest-e2e:install', '--yes'];
     $this->mockJs->hasPlaywright = true;
 
-    $exitCode = Artisan::call('pest-e2e:install', ['--yes' => true]);
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
         ->and($this->mockJs->installCallCount)->toBe(0);
@@ -111,10 +129,12 @@ it('does not call installJsPackage when Playwright already installed', function 
 
 it('injects RefreshDatabase when Pest.php contains RefreshDatabase', function (): void {
     createPestPhp($this->tempDir, "<?php\n\ndeclare(strict_types=1);\n\nuse Illuminate\\Foundation\\Testing\\RefreshDatabase;\n\n");
-    $_SERVER['argv'] = ['artisan', 'pest-e2e:install', '--yes'];
     $this->mockJs->hasPlaywright = true;
 
-    Artisan::call('pest-e2e:install', ['--yes' => true]);
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
 
     $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
     expect($pest)->toContain('RefreshDatabase')
@@ -124,10 +144,12 @@ it('injects RefreshDatabase when Pest.php contains RefreshDatabase', function ()
 
 it('does not duplicate E2ETestCase when already present', function (): void {
     createPestPhp($this->tempDir, "<?php\n\ndeclare(strict_types=1);\n\npest()->extend(Tests\\E2ETestCase::class)->in('Browser');\n");
-    $_SERVER['argv'] = ['artisan', 'pest-e2e:install', '--yes'];
     $this->mockJs->hasPlaywright = true;
 
-    Artisan::call('pest-e2e:install', ['--yes' => true]);
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
 
     $count = substr_count(file_get_contents($this->tempDir.'/tests/Pest.php'), 'E2ETestCase::class');
     expect($count)->toBe(1);

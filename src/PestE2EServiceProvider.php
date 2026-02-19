@@ -57,6 +57,14 @@ final class PestE2EServiceProvider extends ServiceProvider
                 __DIR__.'/../stubs/tests/E2ETestCase.stub' => base_path('tests/E2ETestCase.php'),
             ], 'pest-e2e-test-case');
 
+            $this->publishes([
+                __DIR__.'/../stubs/tests/Browser' => base_path('tests/Browser'),
+            ], 'pest-e2e-browser-tests');
+
+            $this->publishes([
+                __DIR__.'/../stubs/Playwright/e2e' => resource_path('js/e2e'),
+            ], 'pest-e2e-playwright-tests');
+
             $this->commands([
                 InstallCommand::class,
             ]);

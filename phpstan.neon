@@ -2,6 +2,8 @@ parameters:
     level: max
     paths:
         - src
+    excludePaths:
+        - src/stubs/
 
     reportUnmatchedIgnoredErrors: true
     parallel:
