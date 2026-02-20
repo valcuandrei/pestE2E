@@ -32,16 +32,45 @@ final class ProcessRunner
 
         if ($plan->options->inheritTty && Process::isTtySupported()) {
             $process->setTty(true);
+
+            // In TTY mode, output is streamed directly to the terminal by the OS/PTY.
+            // Symfony may not reliably capture output buffers in this mode, but that's OK.
+            $process->run();
+
+            $duration = microtime(true) - $start;
+
+            return new ProcessResultDTO(
+                exitCode: $process->getExitCode() ?? 1,
+                stdout: $process->getOutput(),
+                stderr: $process->getErrorOutput(),
+                durationSeconds: $duration,
+            );
         }
 
-        $process->run();
+        // Stream output live while still capturing it.
+        $stdout = '';
+        $stderr = '';
+
+        $process->run(function (string $type, string $buffer) use (&$stdout, &$stderr): void {
+            if ($type === Process::OUT) {
+                $stdout .= $buffer;
+                fwrite(STDOUT, $buffer);
+                fflush(STDOUT);
+
+                return;
+            }
+
+            $stderr .= $buffer;
+            fwrite(STDERR, $buffer);
+            fflush(STDERR);
+        });
 
         $duration = microtime(true) - $start;
 
         return new ProcessResultDTO(
             exitCode: $process->getExitCode() ?? 1,
-            stdout: $process->getOutput(),
-            stderr: $process->getErrorOutput(),
+            stdout: $stdout,
+            stderr: $stderr,
             durationSeconds: $duration,
         );
     }
