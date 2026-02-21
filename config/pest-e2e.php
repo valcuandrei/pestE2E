@@ -12,4 +12,13 @@ return [
             'value' => '1',
         ],
     ],
+    'reports' => [
+        'dir' => env('PEST_E2E_REPORTS_DIR', storage_path('framework/testing/pest-e2e')),
+        'prune' => [
+            'enabled' => env('PEST_E2E_PRUNE_ENABLED', true),
+            'unit' => env('PEST_E2E_PRUNE_UNIT', 'days'), // days, items
+            'value' => env('PEST_E2E_PRUNE_VALUE', 30),
+        ],
+    ],
+
 ];

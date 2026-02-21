@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Runners;
 
+use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
+use ValcuAndrei\PestE2E\Actions\ReportsPrunerAction;
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
@@ -55,6 +59,12 @@ final readonly class E2ERunner
         $result = $this->processRunner->run($plan);
 
         try {
+            app(ReportsPrunerAction::class)->handle();
+        } catch (InvalidArgumentException $e) {
+            Log::warning("Reports pruning failed: {$e->getMessage()}");
+        }
+
+        try {
             $report = $this->reportReader->readForRun($context);
 
             if ($result->exitCode !== 0 && $report->isSuccessful()) {
@@ -72,7 +82,7 @@ final readonly class E2ERunner
 
                 return $report->withTests([...$report->getTests(), $synthetic]);
             }
-        } catch (\Throwable $reportException) {
+        } catch (Throwable $reportException) {
             throw new RuntimeException("E2E command failed (exit {$result->exitCode}).\n\n".
                 "TARGET:\n{$target->name}\n\n".
                 (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").

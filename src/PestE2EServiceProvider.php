@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E;
 use Illuminate\Support\ServiceProvider;
 use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
 use ValcuAndrei\PestE2E\Commands\InstallCommand;
+use ValcuAndrei\PestE2E\Commands\PruneReportsCommand;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
@@ -67,6 +68,7 @@ final class PestE2EServiceProvider extends ServiceProvider
 
             $this->commands([
                 InstallCommand::class,
+                PruneReportsCommand::class,
             ]);
         }
 
