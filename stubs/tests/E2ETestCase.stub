@@ -25,7 +25,7 @@ abstract class E2ETestCase extends TestCase
         e2e()->target('frontend', fn ($p) => $p
             ->dir('resources/js/e2e')
             ->command('node ../../../resources/js/pest-e2e/playwright/run.mjs')
-            ->report('json', '.pest-e2e/{runId}/report.json')
+            ->report('json', '../../../storage/framework/testing/pest-e2e/{runId}/report.json')
             ->env(['APP_URL' => 'http://localhost'])
             ->params(['baseUrl' => 'http://localhost'])
         );

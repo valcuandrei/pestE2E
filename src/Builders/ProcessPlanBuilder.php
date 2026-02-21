@@ -58,6 +58,7 @@ final readonly class ProcessPlanBuilder
         $commandDto = $commandDto->withInjectedEnv([
             'PEST_E2E_TARGET' => $context->target->name,
             'PEST_E2E_RUN_ID' => $context->runId,
+            'PEST_E2E_REPORT_PATH' => str_replace('{runId}', $context->runId, $context->target->reportPath),
         ]);
 
         $plan = new ProcessPlanDTO(
