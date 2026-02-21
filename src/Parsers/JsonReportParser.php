@@ -55,7 +55,6 @@ final class JsonReportParser
         if (! is_array($data)) {
             throw new JsonReportParserException("Invalid JSON report root ({$source}): expected object");
         }
-
         /** @var array<string, mixed> $data */
         $schema = $this->requireString($data, 'schema', $source);
 
@@ -123,6 +122,7 @@ final class JsonReportParser
         $id = $this->optionalString($t, 'id');
         $durationMs = $this->optionalInt($t, 'durationMs');
         $error = null;
+        $extraLines = $this->optionalStringArray($t, 'extraLines');
 
         if (array_key_exists('error', $t) && $t['error'] !== null) {
             if (! is_array($t['error'])) {
@@ -176,6 +176,7 @@ final class JsonReportParser
             id: $id,
             error: $error,
             artifacts: $artifacts,
+            extraLines: $extraLines,
         );
     }
 
@@ -241,5 +242,26 @@ final class JsonReportParser
         }
 
         return is_int($data[$key]) ? $data[$key] : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>|null
+     */
+    private function optionalStringArray(array $data, string $key): ?array
+    {
+        if (! isset($data[$key]) || ! is_array($data[$key])) {
+            return null;
+        }
+
+        /** @var list<string> $result */
+        $result = [];
+        foreach ($data[$key] as $item) {
+            if (is_string($item)) {
+                $result[] = $item;
+            }
+        }
+
+        return $result;
     }
 }

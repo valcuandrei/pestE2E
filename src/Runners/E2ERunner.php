@@ -8,8 +8,11 @@ use RuntimeException;
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
+use ValcuAndrei\PestE2E\DTO\JsonReportErrorDTO;
+use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
+use ValcuAndrei\PestE2E\Enums\TestStatusType;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 
@@ -51,14 +54,25 @@ final readonly class E2ERunner
         $plan = $this->planBuilder->build($context, $options);
         $result = $this->processRunner->run($plan);
 
-        // Always try to read the JSON report first, even on non-zero exit.
-        // The run.mjs script always exits 0 and writes the canonical report
-        // so the PHP side can read test-level pass/fail details.
-        // Only fall back to a raw RuntimeException if the report is unreadable.
         try {
-            return $this->reportReader->readForRun($context);
+            $report = $this->reportReader->readForRun($context);
+
+            if ($result->exitCode !== 0 && $report->isSuccessful()) {
+                $report = $report->withStats($report->stats->withFailed(1));
+                $message = $this->formatProcessFailureMessage($result->exitCode, $result->stderr, $result->stdout);
+
+                $synthetic = new JsonReportTestDTO(
+                    name: 'E2E process failed',
+                    status: TestStatusType::FAILED,
+                    file: null,
+                    durationMs: null,
+                    id: null,
+                    error: new JsonReportErrorDTO($message),
+                );
+
+                return $report->withTests([...$report->getTests(), $synthetic]);
+            }
         } catch (\Throwable $reportException) {
-            // Report could not be read – fall back to a raw error with process output
             throw new RuntimeException("E2E command failed (exit {$result->exitCode}).\n\n".
                 "TARGET:\n{$target->name}\n\n".
                 (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").
@@ -69,5 +83,22 @@ final readonly class E2ERunner
                 "STDERR:\n{$result->stderr}\n\n".
                 "REPORT ERROR:\n{$reportException->getMessage()}", $reportException->getCode(), $reportException);
         }
+
+        return $report;
+    }
+
+    private function formatProcessFailureMessage(int $exitCode, string $stderr, string $stdout): string
+    {
+        $stderr = trim($stderr);
+        $stdout = trim($stdout);
+        $body = $stderr !== '' ? $stderr : ($stdout !== '' ? $stdout : '(no output)');
+        $maxChars = 4000;
+
+        if (mb_strlen($body) > $maxChars) {
+            $body = mb_substr($body, -$maxChars);
+            $body = "[output truncated to last {$maxChars} chars]\n".$body;
+        }
+
+        return "E2E command exited with code {$exitCode}.\n\n".$body;
     }
 }

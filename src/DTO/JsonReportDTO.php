@@ -103,6 +103,14 @@ final readonly class JsonReportDTO
     }
 
     /**
+     * Check if the report is successful.
+     */
+    public function isSuccessful(): bool
+    {
+        return ! $this->hasFailures();
+    }
+
+    /**
      * Get the failed tests from the report.
      *
      * @return list<JsonReportTestDTO>

@@ -36,18 +36,14 @@ final class E2EOutputFormatter
         ?string $parentTestName,
         array $extraLines,
     ): array {
-        $status = $ok ? '✅ PASSED' : '❌ FAILED';
+        $status = $ok ?
+            TestStatusType::PASSED->getSymbol().' PASSED'
+            : TestStatusType::FAILED->getSymbol().' FAILED';
         $suffix = '';
 
         if ($stats instanceof JsonReportStatsDTO) {
             $duration = $this->formatDurationFromStats($stats, $durationSeconds);
-            $suffix = sprintf(
-                ' (passed=%d failed=%d skipped=%d, %s)',
-                $stats->passed,
-                $stats->failed,
-                $stats->skipped,
-                $duration,
-            );
+            $suffix = sprintf(' (%s)', $duration);
         } elseif ($durationSeconds !== null) {
             $suffix = ' ('.$this->formatDurationSeconds($durationSeconds).')';
         }
@@ -100,7 +96,9 @@ final class E2EOutputFormatter
         ?string $parentTestName,
         array $extraLines,
     ): array {
-        $status = $ok ? '✅ PASSED' : '❌ FAILED';
+        $status = $ok
+            ? TestStatusType::PASSED->getSymbol().' PASSED'
+            : TestStatusType::FAILED->getSymbol().' FAILED';
         $suffix = $durationSeconds !== null ? ' ('.$this->formatDurationSeconds($durationSeconds).')' : '';
 
         $parentTestName = $this->normalizeParentTestName($parentTestName);
@@ -155,6 +153,14 @@ final class E2EOutputFormatter
                     $lines,
                     $this->indentLines($this->splitLines('<fg=red>'.$test->error->message.'</fg=red>'), $this->errorIndent())
                 );
+            }
+
+            if (! empty($test->extraLines)) {
+                foreach ($test->extraLines as $extraLine) {
+                    $lines[] = $this->childIndent().$extraLine;
+                }
+
+                $lines[] = '';
             }
         }
 

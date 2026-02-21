@@ -19,6 +19,7 @@ final readonly class JsonReportTestDTO
      * @param  string|null  $id  (optional) test ID
      * @param  JsonReportErrorDTO|null  $error  (optional) error
      * @param  JsonReportArtifactsDTO|null  $artifacts  (optional) artifacts
+     * @param  array<string>|null  $extraLines  (optional) extra output lines
      */
     public function __construct(
         public string $name,
@@ -28,6 +29,7 @@ final readonly class JsonReportTestDTO
         public ?string $id = null,
         public ?JsonReportErrorDTO $error = null,
         public ?JsonReportArtifactsDTO $artifacts = null,
+        public ?array $extraLines = null,
     ) {}
 
     /**
@@ -43,6 +45,7 @@ final readonly class JsonReportTestDTO
             id: $this->id,
             error: $this->error,
             artifacts: $this->artifacts,
+            extraLines: $this->extraLines,
         );
     }
 
@@ -59,6 +62,7 @@ final readonly class JsonReportTestDTO
             id: $this->id,
             error: $this->error,
             artifacts: $this->artifacts,
+            extraLines: $this->extraLines,
         );
     }
 
@@ -75,6 +79,7 @@ final readonly class JsonReportTestDTO
             id: $this->id,
             error: $this->error,
             artifacts: $this->artifacts,
+            extraLines: $this->extraLines,
         );
     }
 
@@ -91,6 +96,7 @@ final readonly class JsonReportTestDTO
             id: $this->id,
             error: $this->error,
             artifacts: $this->artifacts,
+            extraLines: $this->extraLines,
         );
     }
 
@@ -107,6 +113,7 @@ final readonly class JsonReportTestDTO
             id: $id,
             error: $this->error,
             artifacts: $this->artifacts,
+            extraLines: $this->extraLines,
         );
     }
 
@@ -123,6 +130,7 @@ final readonly class JsonReportTestDTO
             id: $this->id,
             error: $error,
             artifacts: $this->artifacts,
+            extraLines: $this->extraLines,
         );
     }
 
@@ -139,6 +147,26 @@ final readonly class JsonReportTestDTO
             id: $this->id,
             error: $this->error,
             artifacts: $artifacts,
+            extraLines: $this->extraLines,
+        );
+    }
+
+    /**
+     * Create a new JsonReportTestDTO instance with the given extra lines.
+     *
+     * @param  array<string>  $extraLines
+     */
+    public function withExtraLines(array $extraLines): self
+    {
+        return new self(
+            name: $this->name,
+            status: $this->status,
+            file: $this->file,
+            durationMs: $this->durationMs,
+            id: $this->id,
+            error: $this->error,
+            artifacts: $this->artifacts,
+            extraLines: $extraLines,
         );
     }
 
@@ -196,6 +224,7 @@ final readonly class JsonReportTestDTO
             'id' => $this->id,
             'error' => $this->error?->toArray(),
             'artifacts' => $this->artifacts?->toArray(),
+            'extraLines' => $this->extraLines,
         ];
     }
 
@@ -244,6 +273,10 @@ final readonly class JsonReportTestDTO
             throw new \InvalidArgumentException("Invalid status: {$array['status']}");
         }
 
+        $extraLinesRaw = $array['extraLines'] ?? null;
+        assert(is_array($extraLinesRaw) || $extraLinesRaw === null);
+        $extraLines = $extraLinesRaw === null ? null : array_values(array_filter($extraLinesRaw, is_string(...)));
+
         return new self(
             name: $array['name'],
             status: $status,
@@ -252,6 +285,7 @@ final readonly class JsonReportTestDTO
             id: $id,
             error: isset($array['error']) && $array['error'] ? JsonReportErrorDTO::fromArray($array['error']) : null,
             artifacts: isset($array['artifacts']) && $array['artifacts'] ? JsonReportArtifactsDTO::fromArray($array['artifacts']) : null,
+            extraLines: $extraLines,
         );
     }
 
@@ -265,6 +299,7 @@ final readonly class JsonReportTestDTO
             status: TestStatusType::PASSED,
             file: null,
             durationMs: 1000,
+            extraLines: [],
         );
     }
 
