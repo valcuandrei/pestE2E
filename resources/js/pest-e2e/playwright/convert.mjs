@@ -40,7 +40,7 @@ export class Convert {
      * @param {string} message - Error message
      * @returns {Promise<void>}
      */
-    async writeSyntheticFailureReport(message) {
+    async writeSyntheticFailureReport(message, name = 'E2E harness failed') {
         const report = {
             schema: 'pest-e2e.v1',
             target: this.#target,
@@ -48,7 +48,7 @@ export class Convert {
             stats: { passed: 0, failed: 1, skipped: 0, durationMs: 0 },
             tests: [
                 {
-                    name: 'E2E harness failed',
+                    name: name,
                     status: 'failed',
                     file: null,
                     durationMs: null,

@@ -10,7 +10,7 @@ namespace ValcuAndrei\PestE2E\DTO;
 final readonly class RunContextDTO
 {
     /**
-     * @param  array<string, string>  $env
+     * @param  array<string, string|null>  $env
      * @param  array<string, mixed>  $params
      */
     public function __construct(
@@ -24,7 +24,7 @@ final readonly class RunContextDTO
     /**
      * Create a new RunContextDTO instance.
      *
-     * @param  array<string, string>  $env
+     * @param  array<string, string|null>  $env
      * @param  array<string, mixed>  $params
      */
     public static function make(
@@ -49,7 +49,7 @@ final readonly class RunContextDTO
     /**
      * Create a new RunContextDTO instance with the given environment variables.
      *
-     * @param  array<string, string>  $env
+     * @param  array<string, string|null>  $env
      */
     public function withEnv(array $env): self
     {

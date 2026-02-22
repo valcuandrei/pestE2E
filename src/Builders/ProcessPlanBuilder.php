@@ -59,6 +59,7 @@ final readonly class ProcessPlanBuilder
             'PEST_E2E_TARGET' => $context->target->name,
             'PEST_E2E_RUN_ID' => $context->runId,
             'PEST_E2E_REPORT_PATH' => str_replace('{runId}', $context->runId, $context->target->reportPath),
+            'PEST_E2E_TEST_FILTER' => $context->testFilter,
         ]);
 
         $plan = new ProcessPlanDTO(

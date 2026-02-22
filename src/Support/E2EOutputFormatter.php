@@ -149,9 +149,10 @@ final class E2EOutputFormatter
             $lines[] = $this->childIndent().$test->status->getSymbol().' <fg=gray>'.$test->name.'</fg=gray>';
 
             if ($test->status === TestStatusType::FAILED && $test->error?->message !== null) {
+                $message = $this->stripAnsiEscapeSequences(trim($test->error->message));
                 $lines = array_merge(
                     $lines,
-                    $this->indentLines($this->splitLines('<fg=red>'.$test->error->message.'</fg=red>'), $this->errorIndent())
+                    $this->indentLines($this->splitLines('<fg=red>'.$message.'</fg=red>'), $this->errorIndent())
                 );
             }
 
@@ -211,6 +212,16 @@ final class E2EOutputFormatter
         $name = trim($name);
 
         return $name === '' ? null : $name;
+    }
+
+    /**
+     * Strip ANSI escape sequences (e.g. cursor movement, line erase) from a string.
+     * Playwright and other CLIs emit these for progress display; when captured and
+     * re-displayed, they corrupt the output (e.g. \e[1A\e[2K erases the visible line).
+     */
+    private function stripAnsiEscapeSequences(string $text): string
+    {
+        return preg_replace('/\x1B\[[0-9;]*[a-zA-Z]/', '', $text) ?? $text;
     }
 
     /**

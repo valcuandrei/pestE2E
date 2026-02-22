@@ -20,7 +20,7 @@ final class TargetBuilder
 
     private ?string $reportPath = null;
 
-    /** @var array<string,string> */
+    /** @var array<string,string|null> */
     private array $env = [];
 
     /** @var array<string,mixed> */
@@ -64,7 +64,7 @@ final class TargetBuilder
     /**
      * Set the environment variables of the target.
      *
-     * @param  array<string,string>  $env
+     * @param  array<string,string|null>  $env
      */
     public function env(array $env): self
     {

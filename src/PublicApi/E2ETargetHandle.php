@@ -30,7 +30,7 @@ use ValcuAndrei\PestE2E\Support\E2EOutputStore;
  */
 final class E2ETargetHandle
 {
-    /** @var array<string,string> */
+    /** @var array<string,string|null> */
     private array $env = [];
 
     /** @var array<string,mixed> */
@@ -53,7 +53,7 @@ final class E2ETargetHandle
     /**
      * With environment variables.
      *
-     * @param  array<string,string>  $env
+     * @param  array<string,string|null>  $env
      */
     public function withEnv(array $env): self
     {

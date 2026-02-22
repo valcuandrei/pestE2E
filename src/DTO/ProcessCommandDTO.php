@@ -11,8 +11,8 @@ final readonly class ProcessCommandDTO
 {
     /**
      * @param  string  $command  Raw command string (executed as-is).
-     * @param  array<string, string>  $env
-     * @param  array<string, string>  $injectedEnv  (optional) additional env to apply last
+     * @param  array<string, string|null>  $env
+     * @param  array<string, string|null>  $injectedEnv  (optional) additional env to apply last
      */
     public function __construct(
         public string $command,
@@ -24,7 +24,7 @@ final readonly class ProcessCommandDTO
     /**
      * Create a new ProcessCommandDTO instance with the given environment variables.
      *
-     * @param  array<string, string>  $env
+     * @param  array<string, string|null>  $env
      */
     public function withEnv(array $env): self
     {
@@ -39,7 +39,7 @@ final readonly class ProcessCommandDTO
     /**
      * Injected env applied last (useful for injected PEST_E2E_* vars).
      *
-     * @param  array<string, string>  $env
+     * @param  array<string, string|null>  $env
      */
     public function withInjectedEnv(array $env): self
     {
@@ -54,7 +54,7 @@ final readonly class ProcessCommandDTO
     /**
      * Get the merged environment variables. Returns a new array.
      *
-     * @return array<string, string>
+     * @return array<string, string|null>
      */
     public function getMergedEnv(): array
     {

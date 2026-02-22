@@ -10,7 +10,7 @@ namespace ValcuAndrei\PestE2E\DTO;
 final readonly class TargetConfigDTO
 {
     /**
-     * @param  array<string, string>  $env  (optional) environment variables
+     * @param  array<string, string|null>  $env  (optional) environment variables
      * @param  array<string, mixed>  $params  (optional) parameters
      * @param  string|null  $artifactsDir  (optional) artifacts directory
      */

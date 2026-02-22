@@ -39,7 +39,7 @@ final readonly class E2ERunner
     /**
      * Run the E2E test suite for a target.
      *
-     * @param  array<string,string>  $env
+     * @param  array<string,string|null>  $env
      * @param  array<string,mixed>  $params
      * @param  ProcessOptionsDTO|null  $options  (optional) process options
      * @param  string|null  $testFilter  (optional) test filter
@@ -56,7 +56,7 @@ final readonly class E2ERunner
         $runId ??= $this->runIdGenerator->generate();
         $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
         $plan = $this->planBuilder->build($context, $options);
-        $result = $this->processRunner->run($plan);
+        $runResult = $this->processRunner->run($plan);
 
         try {
             app(ReportsPrunerAction::class)->handle();
@@ -67,9 +67,9 @@ final readonly class E2ERunner
         try {
             $report = $this->reportReader->readForRun($context);
 
-            if ($result->exitCode !== 0 && $report->isSuccessful()) {
+            if ($runResult->exitCode !== 0 && $report->isSuccessful()) {
                 $report = $report->withStats($report->stats->withFailed(1));
-                $message = $this->formatProcessFailureMessage($result->exitCode, $result->stderr, $result->stdout);
+                $message = $this->formatProcessFailureMessage($runResult->exitCode, $runResult->stderr, $runResult->stdout);
 
                 $synthetic = new JsonReportTestDTO(
                     name: 'E2E process failed',
@@ -80,17 +80,17 @@ final readonly class E2ERunner
                     error: new JsonReportErrorDTO($message),
                 );
 
-                return $report->withTests([...$report->getTests(), $synthetic]);
+                return $report->withTests(array_merge($report->getTests(), [$synthetic]));
             }
         } catch (Throwable $reportException) {
-            throw new RuntimeException("E2E command failed (exit {$result->exitCode}).\n\n".
+            throw new RuntimeException("E2E command failed (exit {$runResult->exitCode}).\n\n".
                 "TARGET:\n{$target->name}\n\n".
                 (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").
                 "RUN_ID:\n{$runId}\n\n".
                 "CMD:\n{$plan->command->command}\n\n".
                 "CWD:\n{$plan->command->workingDirectory}\n\n".
-                "STDOUT:\n{$result->stdout}\n\n".
-                "STDERR:\n{$result->stderr}\n\n".
+                "STDOUT:\n{$runResult->stdout}\n\n".
+                "STDERR:\n{$runResult->stderr}\n\n".
                 "REPORT ERROR:\n{$reportException->getMessage()}", $reportException->getCode(), $reportException);
         }
 
