@@ -21,6 +21,7 @@ use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Enums\AuthModeType;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
@@ -208,6 +209,12 @@ final class E2ETargetHandle
         $report = null;
         $ok = false;
         $thrown = null;
+        $extraLines = [];
+        $currentTestId = $this->testContext->get();
+
+        if (CliOptions::$debug) {
+            fwrite(STDERR, "\n⚠ Debug mode active. Browser will remain open on failure.\n");
+        }
 
         try {
             $report = $this->root->runner()->run(
@@ -239,7 +246,7 @@ final class E2ETargetHandle
             stats: $report?->stats,
             tests: $report instanceof JsonReportDTO ? $report->tests : [],
             parentTestName: $parentTestName,
-            extraLines: [],
+            extraLines: $extraLines,
         );
 
         // Store for inline output (keyed by PHPUnit test ID)
@@ -284,6 +291,26 @@ final class E2ETargetHandle
         $clone->testFilter = $testName;
 
         return $clone;
+    }
+
+    /**
+     * Set debug mode.
+     */
+    public function debug(): self
+    {
+        CliOptions::$debug = true;
+
+        return $this;
+    }
+
+    /**
+     * Set browse mode.
+     */
+    public function browse(): self
+    {
+        CliOptions::$browse = true;
+
+        return $this;
     }
 
     /**

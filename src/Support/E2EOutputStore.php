@@ -33,6 +33,19 @@ final class E2EOutputStore
     private array $entries = [];
 
     /**
+     * Flags for a specific test ID.
+     *
+     * @example [
+     *     'testId' => [
+     *         'debug_notice' => true,
+     *     ],
+     * ]
+     *
+     * @var array<string, array<string, bool>>
+     */
+    private array $flags = [];
+
+    /**
      * @param  array<int, string>  $lines
      */
     public function add(
@@ -101,6 +114,20 @@ final class E2EOutputStore
     public function removeForTest(string $testId): void
     {
         unset(self::$perTestEntries[$testId]);
+    }
+
+    /**
+     * Mark a flag for a specific test ID.
+     */
+    public function markFlag(string $testId, string $flag): bool
+    {
+        if (($this->flags[$testId][$flag] ?? false) === true) {
+            return false;
+        }
+
+        $this->flags[$testId][$flag] = true;
+
+        return true;
     }
 
     /**

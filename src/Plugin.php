@@ -6,15 +6,17 @@ namespace ValcuAndrei\PestE2E;
 
 use Pest\Collision\Events;
 use Pest\Contracts\Plugins\AddsOutput;
+use Pest\Contracts\Plugins\HandlesArguments;
 use Pest\Contracts\Plugins\Terminable;
 use Symfony\Component\Console\Output\OutputInterface;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
 /**
  * @internal
  */
-final class Plugin implements AddsOutput, Terminable
+final class Plugin implements AddsOutput, HandlesArguments, Terminable
 {
     /**
      * Creates a new Plugin instance.
@@ -35,6 +37,16 @@ final class Plugin implements AddsOutput, Terminable
     private function store(): E2EOutputStore
     {
         return app(E2EOutputStore::class);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function handleArguments(array $arguments): array
+    {
+        CliOptions::fromArguments($arguments);
+
+        return array_values(array_diff($arguments, CliOptions::optionKeys()));
     }
 
     /**

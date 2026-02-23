@@ -12,6 +12,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessCommandDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 
 /**
  * @internal
@@ -59,8 +60,16 @@ final readonly class ProcessPlanBuilder
             'PEST_E2E_TARGET' => $context->target->name,
             'PEST_E2E_RUN_ID' => $context->runId,
             'PEST_E2E_REPORT_PATH' => str_replace('{runId}', $context->runId, $context->target->reportPath),
-            'PEST_E2E_TEST_FILTER' => $context->testFilter,
+            'PEST_E2E_TEST_FILTER' => $context->testFilter ?? '',
+            'PEST_E2E_BROWSE' => CliOptions::$browse ? '1' : '0',
+            'PEST_E2E_DEBUG' => CliOptions::$debug ? '1' : '0',
         ]);
+
+        $options = $options->withTimeoutSeconds(
+            CliOptions::$browse || CliOptions::$debug
+                ? 60 * 60 // 1 hour
+                : $options->timeoutSeconds
+        );
 
         $plan = new ProcessPlanDTO(
             command: $commandDto,

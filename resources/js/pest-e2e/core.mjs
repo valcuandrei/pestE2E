@@ -1,4 +1,5 @@
 import { readFile } from 'fs/promises';
+import { dirname } from 'path';
 
 export const DEFAULT_AUTH_ENDPOINT = '/pest-e2e/auth/login';
 
@@ -77,4 +78,34 @@ export function getAuthTicket(params) {
   }
 
   return params.auth.ticket;
+}
+
+/**
+ * Get the configuration for the E2E test run.
+ */
+export function getConfig() {
+  const target = process.env.PEST_E2E_TARGET;
+  const runId = process.env.PEST_E2E_RUN_ID;
+
+  if (!target) {
+    console.error('Error: PEST_E2E_TARGET environment variable is required');
+    process.exit(1);
+  }
+
+  if (!runId) {
+    console.error('Error: PEST_E2E_RUN_ID environment variable is required');
+    process.exit(1);
+  }
+
+  const canonicalReportPath = process.env.PEST_E2E_REPORT_PATH || `.pest-e2e/${runId}/report.json`;
+
+  return {
+    target,
+    runId,
+    testFilter: process.env.PEST_E2E_TEST_FILTER,
+    browse: process.env.PEST_E2E_BROWSE === '1',
+    debug: process.env.PEST_E2E_DEBUG === '1',
+    canonicalReportPath,
+    rawReportPath: `${dirname(canonicalReportPath)}/playwright-report.json`,
+  };
 }
