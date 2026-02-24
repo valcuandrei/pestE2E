@@ -15,6 +15,7 @@ final class ServerRunner
     private ?Process $process = null;
 
     private string $host = '127.0.0.1';
+
     private int $port = 0;
 
     /**
@@ -23,7 +24,8 @@ final class ServerRunner
      * The callback receives ($baseUrl).
      *
      * @template T
-     * @param callable(string): T $callback
+     *
+     * @param  callable(string): T  $callback
      * @return T
      */
     public function run(callable $callback, bool $keepAliveOnFailure = false)
@@ -31,7 +33,7 @@ final class ServerRunner
         if (! $this->canServeLaravelApp()) {
             // We are in a non-servable environment (Testbench/package context).
             // Use whatever app URL is already configured.
-            $baseUrl = rtrim((string) config('app.url', 'http://127.0.0.1'), '/');
+            $baseUrl = rtrim(config()->string('app.url', 'http://127.0.0.1'), '/');
 
             return $callback($baseUrl);
         }
@@ -105,6 +107,7 @@ final class ServerRunner
 
         if (! $this->process->isRunning()) {
             $this->process = null;
+
             return;
         }
 
@@ -113,7 +116,7 @@ final class ServerRunner
         $this->process->stop(2);
 
         // Extra belt: if still running, force kill now.
-        if ($this->process->isRunning()) {
+        if ($this->process->isRunning()) { // @phpstan-ignore-line
             $this->process->stop(0);
         }
 
@@ -166,7 +169,7 @@ final class ServerRunner
             }
 
             // Probe preferred path first (may be 404 - that's fine; we just want a response)
-            if ($this->httpResponds($baseUrl . $probePath) || $this->httpResponds($baseUrl . '/')) {
+            if ($this->httpResponds($baseUrl.$probePath) || $this->httpResponds($baseUrl.'/')) {
                 return;
             }
 
@@ -220,6 +223,10 @@ final class ServerRunner
 
         $name = stream_socket_get_name($socket, false);
         fclose($socket);
+
+        if ($name === false) {
+            throw new RuntimeException("Unable to determine chosen port from socket name: {$name}");
+        }
 
         $pos = strrpos($name, ':');
         if ($pos === false) {

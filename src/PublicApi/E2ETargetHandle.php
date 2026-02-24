@@ -217,10 +217,10 @@ final class E2ETargetHandle
         }
 
         try {
-            $serverRunner = new ServerRunner();
+            $serverRunner = new ServerRunner;
             [$report, $ok, $thrown] = $serverRunner->run(
                 /** @return array{0: JsonReportDTO, 1: bool, 2: ?\RuntimeException} */
-                callback: function (string $baseUrl) use ($runId) {
+                callback: function (string $baseUrl) use ($runId): array {
                     $report = $this->root->runner()->run(
                         targetName: $this->target,
                         env: array_merge($this->env, ['APP_URL' => $baseUrl]),
