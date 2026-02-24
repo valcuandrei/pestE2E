@@ -21,6 +21,7 @@ use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Enums\AuthModeType;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
+use ValcuAndrei\PestE2E\Runners\ServerRunner;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
@@ -210,30 +211,37 @@ final class E2ETargetHandle
         $ok = false;
         $thrown = null;
         $extraLines = [];
-        $currentTestId = $this->testContext->get();
 
         if (CliOptions::$debug) {
             fwrite(STDERR, "\n⚠ Debug mode active. Browser will remain open on failure.\n");
         }
 
         try {
-            $report = $this->root->runner()->run(
-                targetName: $this->target,
-                env: $this->env,
-                params: $this->params,
-                options: $this->options,
-                runId: $runId,
-                testFilter: $this->testFilter,
+            $serverRunner = new ServerRunner();
+            [$report, $ok, $thrown] = $serverRunner->run(
+                /** @return array{0: JsonReportDTO, 1: bool, 2: ?\RuntimeException} */
+                callback: function (string $baseUrl) use ($runId) {
+                    $report = $this->root->runner()->run(
+                        targetName: $this->target,
+                        env: array_merge($this->env, ['APP_URL' => $baseUrl]),
+                        params: $this->params,
+                        options: $this->options,
+                        runId: $runId,
+                        testFilter: $this->testFilter,
+                    );
+
+                    $ok = ! $report->hasFailures();
+                    $thrown = $ok ? null : $this->reportFailureException($report, $runId);
+
+                    return [$report, $ok, $thrown];
+                },
+                keepAliveOnFailure: CliOptions::$debug,
             );
-
-            $ok = ! $report->hasFailures();
-
-            if (! $ok) {
-                $thrown = $this->reportFailureException($report, $runId);
-            }
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             $ok = false;
-            $thrown = $e;
+            $thrown = $e instanceof \RuntimeException
+                ? $e
+                : new \RuntimeException($e->getMessage(), (int) $e->getCode(), $e);
         }
 
         $durationSeconds = microtime(true) - $startedAt;
