@@ -1,309 +1,345 @@
 # pestE2E
 
-Laravel-first backend, frontend-runner-agnostic bridge that runs **JS-owned** E2E/component tests (Playwright by default)
-from Pest **without introducing a PHP browser DSL**. Supports test filtering for running specific tests.
+**Laravel-first E2E orchestration for JavaScript-native browser testing.**
 
-## What this is
+Run your existing JS E2E suite (Playwright by default) from Pest — without introducing a PHP browser DSL.
 
-A **Laravel-first E2E orchestration layer** for Pest that runs
-**JavaScript-owned** browser tests (Playwright by default)
-and maps structured results back into Pest output.
+---
 
-Think of this as an **Inertia-style bridge for E2E testing**:
+## What This Is
 
-- Laravel owns test intent, state, auth, and data
-- JavaScript owns browser execution
-- A stable contract connects the two
+**pestE2E** is a Laravel-native orchestration layer that runs JavaScript-owned browser tests and maps structured results back into Pest output.
 
-Pest orchestrates JS test execution, passes context (env, params, auth),
-and maps structured results back into Pest output.
+Conceptually, this is an Inertia-style bridge for E2E testing:
+
+* Laravel owns test intent, state, authentication, and data
+* JavaScript owns browser execution
+* A stable contract connects the two
+
+Pest orchestrates JS execution, passes context (environment, params, auth), and consumes structured JSON reports.
+
+This package does **not** wrap Playwright in PHP.
+It orchestrates your existing JS test suite from Laravel.
+
+---
 
 ## Key Features
 
-- **JS Test Filtering**: Run specific tests with `e2e('frontend')->only('test name')` or `runTest('test name')`
-- **Laravel Authentication**: Transfer auth state using `actingAs($user)` with one-time tickets
-- **Runner Agnostic**: Supports Playwright, Jest, and other JS runners via configurable commands
-- **Environment Aware**: Automatically inherits Laravel's execution environment (local, Docker, Sail)
-- **Type Safe**: Full PHPStan level compliance with robust type checking
+* JS test filtering via `only()` and `runTest()`
+* Laravel authentication using one-time auth tickets
+* Runner agnostic (Playwright by default, others via `command()`)
+* Managed testing server (no manual `php artisan serve`)
+* Isolated testing environment
+* Stable JSON reporting contract (`pest-e2e.v1`)
+* Fully type-safe (PHPStan compliant)
 
-## Terminology
-- Project: the Laravel app (backend)
-- Target: a runnable E2E suite (frontend, admin, marketing, etc.)
+---
 
-## What this is NOT
-- ❌ Not a browser abstraction
-- ❌ Not a PHP wrapper around Playwright
-- ❌ Not Dusk
-- ❌ Not Selenium
-- ❌ No `visit()`, `click()`, `type()` — ever
+## What This Is NOT
 
-All browser logic lives in JS.
+* Not a browser abstraction
+* Not a PHP wrapper around Playwright
+* Not Dusk
+* Not Selenium
+* No `visit()`, `click()`, or `type()` in PHP — ever
 
-## Supported environments
-- Laravel apps
-- Pest
-- Node-based test runners (Playwright first)
-- Docker / Sail **supported but not required**
+All browser logic lives in JavaScript.
 
-The execution environment is determined by **how Pest is invoked**
-(e.g. `php artisan test` vs `./vendor/bin/sail artisan test`),
-not by the package.
+---
 
 ## Status
-⚠️ Early design phase
-The public API and architecture are being locked before implementation.
 
-## Laravel integration
-- Service provider is auto-discovered
-- Testing-only routes load in the `testing` environment
+**Stable v1**
 
-### Test Environment Setup
+The public PHP API, authentication contract, and JSON report schema are locked.
+Internal runner adapters may evolve.
 
-For e2e tests to work properly with Laravel, configure your test environment:
+---
 
-**1. Enable the auth route in `.env.testing`:**
+# Installation
+
+Install the package:
+
 ```bash
-PEST_E2E_AUTH_ROUTE_ENABLED=true
+composer require valcuandrei/pest-e2e --dev
+```
+
+Then run:
+
+```bash
+php artisan pest-e2e:install
+```
+
+The installer can:
+
+* Update your `pest.php` to include `E2ETestCase`
+* Publish `config/pest-e2e.php`
+* Publish the base E2E test case
+* Publish the JS harness
+* Publish the Playwright integration
+* Install Playwright
+
+### Unattended / CI mode
+
+```bash
+php artisan pest-e2e:install --yes
+```
+
+Alias:
+
+```bash
+php artisan pest-e2e:install --unattended
+```
+
+---
+
+# Testing Environment (Important)
+
+pestE2E starts a managed Laravel server using:
+
+```
+--env=testing
+```
+
+If a `.env.testing` file exists, Laravel automatically loads it.
+
+You should create a `.env.testing` file with an isolated database configuration:
+
+```dotenv
 APP_ENV=testing
-DB_DATABASE=testing
+APP_DEBUG=true
+
+DB_CONNECTION=mysql
+DB_DATABASE=your_test_database
+
 CACHE_STORE=file
-```
+SESSION_DRIVER=file
 
-**2. Use `DatabaseMigrations` in tests:**
-```php
-pest()->extend(Tests\TestCase::class)
-    ->use(Illuminate\Foundation\Testing\DatabaseMigrations::class)
-    ->in('Feature');
-```
-
-**3. Exclude pest-e2e routes from CSRF (`bootstrap/app.php`):**
-```php
-->withMiddleware(function (Middleware $middleware): void {
-    $middleware->validateCsrfTokens(except: [
-        'pest-e2e/*',
-    ]);
-})
-```
-
-**4. Run a dev server with the testing environment:**
-```bash
-# When running tests, the web server needs to be in testing mode
-APP_ENV=testing php artisan serve --host=0.0.0.0 --port=80
-# Or with Sail:
-sail exec -d laravel.test env APP_ENV=testing php artisan serve --host=0.0.0.0 --port=80
+PEST_E2E_AUTH_ROUTE_ENABLED=true
 ```
 
 This ensures:
-- The test process and web server share the same database and cache
-- Auth tickets work across processes
-- Playwright can authenticate and interact with your app
 
-## Backend scope
+* Your development database is not modified
+* Auth routes are enabled only during testing
+* The Pest process and the managed server use the same database
 
-This package is **Laravel-native by design**.
+Your `phpunit.xml` database configuration must match `.env.testing` (or be removed) so both processes remain in sync.
 
-- Auth, sessions, Sanctum, and users are handled using Laravel primitives
-- A testing-only auth endpoint is provided by the package
-- Laravel DX (`actingAs`, personas) is a first-class goal
+The managed server is started in isolation and inherits no development state beyond explicitly provided environment variables.
 
-Runner-agnosticism applies to **targets**, not the Laravel app.
+---
 
-## Quick Start
+# Quick Start
+
+Configure a target inside the setUp() method of tests/E2ETestCase.php:
 
 ```php
-// Configure target with filtering support
 e2e()->target('frontend', fn ($p) => $p
     ->dir('frontend')
     ->command('node resources/js/pest-e2e/playwright/run.mjs')
-    ->filter('--grep') // Enable test filtering
-    ->report('json', '.pest-e2e/{runId}/report.json')
+    ->report('json', 'storage/framework/testing/pest-e2e/{runId}/report.json')
 );
+```
+>Targets should be registered once in your base E2E test case, not inside individual tests.
 
-// Run all tests
+Run all tests:
+
+```php
 e2e('frontend')->run();
-
-// Run specific test
-e2e('frontend')->only('can login')->run();
-
-// Run specific test with authentication  
-e2e('frontend')
-    ->actingAs($user)
-    ->runTest('can checkout');
 ```
 
-## JavaScript Integration
-
-This package provides a TypeScript/JavaScript harness that can be published into your Laravel app for use with Playwright and other test runners.
-
-### Publishing the JavaScript Assets
-
-Publish the JavaScript harness files to your Laravel app:
-
-```bash
-php artisan pest-e2e:publish
-```
-
-This publishes the JavaScript files to `resources/js/pest-e2e/`:
-- `core.mjs` - Core utilities for reading parameters and authentication
-- `playwright.mjs` - Playwright-specific global setup and helpers
-- `playwright/run.mjs` - Playwright runner wrapper with report conversion
-- `playwright/convert.mjs` - Playwright JSON report converter
-
-### Playwright Integration
-
-#### 1. Configure Your Target Command
-
-Configure your Laravel target to use the Playwright runner wrapper:
+Run a specific test:
 
 ```php
-e2e()->target('frontend', fn ($p) => $p
-    ->dir('frontend')
-    ->command('node resources/js/pest-e2e/playwright/run.mjs')
-    ->report('json', '.pest-e2e/{runId}/report.json')
-);
+e2e('frontend')->runTest('UserProfile can update their profile');
 ```
 
-The runner wrapper (`run.mjs`) automatically:
-- Executes Playwright with JSON reporting
-- Converts the raw Playwright report to PestE2E canonical format
-- Writes the canonical report to the expected path for PHP consumption
+---
 
-#### 2. Configure Global Setup
+# Example: Complex Frontend Flow
 
-In your `playwright.config.js`:
+## PHP (Pest)
 
-```javascript
-import { storageStatePath } from '../pest-e2e/playwright.mjs';
+```php
+use App\Models\User;
 
-export default {
-  globalSetup: './global-setup.mjs', // See below
-  use: {
-    baseURL: process.env.APP_URL || 'http://localhost',
-    storageState: storageStatePath(), // Auto-auth for all tests
-  },
-  // ... other config
-};
+test('that a user can update their profile', function () {
+    $user = User::factory()->create();
+
+    e2e('frontend')
+        ->actingAs($user)
+        ->withParams([
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+        ])
+        ->runTest('UserProfile can update their profile');
+
+    expect($user->fresh()->name)->toBe('Test User');
+    expect($user->fresh()->email)->toBe('test@example.com');
+});
 ```
 
-Create `global-setup.mjs` in your test directory:
+## JavaScript (Playwright)
 
-```javascript
-export { globalSetup as default } from '../pest-e2e/playwright.mjs';
-```
-
-The `globalSetup` automatically:
-- Reads the auth ticket from `PEST_E2E_PARAMS`
-- Calls the pest-e2e auth endpoint (`/pest-e2e/auth/login`)
-- Saves session cookies to `storageState.json`
-- All tests automatically use the authenticated session
-
-#### 3. Write Clean Tests
-
-Your Playwright tests are now automatically authenticated. No boilerplate needed:
-
-```typescript
+```ts
 import { test, expect } from '@playwright/test';
+import { readParams } from '../pest-e2e/core.mjs';
 
 test('UserProfile can update their profile', async ({ page }) => {
+    const { name, email } = await readParams();
+
     await page.goto('/settings/profile');
-    await page.locator('#name').fill('Test User');
-    await page.locator('#email').fill('test@example.com');
+    await page.locator('#name').fill(name);
+    await page.locator('#email').fill(email);
     await page.getByTestId('update-profile-button').click();
+
     await expect(page.getByText('Saved.')).toBeVisible();
 });
 ```
 
-The `globalSetup` handles all auth automatically using the ticket from `actingAs($user)`.
+Laravel controls state and authentication.
+JavaScript controls the browser.
 
-#### 3. Report Conversion
+---
 
-The Playwright runner wrapper automatically converts Playwright's JSON report format to PestE2E's canonical JSON schema (v1). This ensures PHP can always read a stable report format regardless of Playwright version changes.
+# Why Not Use Pest’s Native Browser Testing?
 
-**Canonical Report Schema:**
-```json
-{
-  "schema": "pest-e2e.v1",
-  "target": "string",
-  "runId": "string", 
-  "stats": {
-    "passed": 0,
-    "failed": 0,
-    "skipped": 0,
-    "durationMs": 0
-  },
-  "tests": [
-    {
-      "name": "test name",
-      "status": "passed|failed|skipped",
-      "durationMs": 1234,
-      "error": {
-        "message": "error details (if failed)"
-      }
-    }
-  ]
-}
+Pest’s built-in browser testing (Dusk-style) is excellent for:
+
+* Form submissions
+* CRUD flows
+* Traditional backend-driven pages
+* Simple UI assertions
+
+However, for advanced frontend systems such as:
+
+* Drag-and-drop page builders
+* Resizable layout systems
+* CSS box-model assertions (width, height, margin, padding)
+* Transform-based positioning
+* Vue / Pinia state inspection
+* DOM measurement and layout calculations
+
+You need full native Playwright running in its own JavaScript environment.
+
+pestE2E orchestrates your JS suite — it does not abstract it.
+
+---
+
+# Managed Testing Server
+
+When you call:
+
+```php
+e2e('frontend')->run();
 ```
 
-**Status Mapping:**
-- `passed` → `passed`
-- `skipped` → `skipped`  
-- `failed`/`timedOut`/`interrupted` → `failed`
+pestE2E automatically:
 
-**Test Naming:**
-- Uses `titlePath` joined with " › " when available
-- Falls back to `title` 
-- Prefixes with `[project]` when multiple Playwright projects are configured
+1. Boots a temporary Laravel HTTP server
+2. Forces it into `APP_ENV=testing`
+3. Binds it to `127.0.0.1` on a free port
+4. Executes your JS runner against that server
+5. Collects the JSON report
+6. Shuts the server down
 
-#### 4. Environment Variables
+No manual `php artisan serve` required.
+No environment leakage into development.
 
-The harness reads configuration from these environment variables:
+---
 
-- `PEST_E2E_PARAMS` - JSON string containing parameters
-- `PEST_E2E_PARAMS_FILE` - Path to JSON file with parameters (fallback)
-- `APP_URL` - Your Laravel application URL
-- `PEST_E2E_RUN_ID` - Unique run identifier (auto-generated if not set)
-- `PEST_E2E_TARGET` - Target name (set automatically by Laravel)
-- `PEST_E2E_REPORT_PATH` - Path for canonical report (defaults to `.pest-e2e/{runId}/report.json`)
+# Running Tests
 
-### Core API
+Local:
 
-The published `core.mjs` provides these utilities:
-
-```javascript
-import {
-  readParams,
-  getAppUrl,
-  hasAuthTicket,
-  getAuthTicket
-} from '../pest-e2e/core.mjs';
-
-// Read parameters from environment
-const params = await readParams();
-
-// Get application URL
-const appUrl = getAppUrl(params); // Falls back to APP_URL env var
-
-// Check for authentication ticket (handled automatically by globalSetup)
-if (hasAuthTicket(params)) {
-  const ticket = getAuthTicket(params);
-  // No need to use this manually - globalSetup handles auth automatically
-}
+```bash
+php artisan test
 ```
 
-**Note:** With `globalSetup` configured, you don't need to manually handle auth in your tests.
+Sail:
 
-### Custom Integration
-
-If you're not using Playwright, you can import the core utilities directly:
-
-```javascript
-import { readParams, getAppUrl } from '../pest-e2e/core.mjs';
-
-// Your custom test runner setup
-async function setupTests() {
-  const params = await readParams();
-  const appUrl = getAppUrl(params);
-  
-  // Use params and appUrl in your test setup
-}
+```bash
+sail artisan test
 ```
+
+---
+
+# Debug & Headed Mode
+
+```bash
+php artisan test --browse
+php artisan test --debug
+```
+
+* `--browse` / `--headed` → runs browser in headed mode
+* `--debug` → enables debug mode and implies headed mode
+
+## Headed Mode in Sail (WSL2 + WSLg)
+
+If you run Pest inside Sail on Windows (WSL2) and want headed mode, forward WSLg into the container by adding this to your `laravel.test` service:
+
+```yaml
+environment:
+  DISPLAY: ${DISPLAY}
+  WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}
+  XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR}
+  PULSE_SERVER: ${PULSE_SERVER}
+
+volumes:
+  - /mnt/wslg:/mnt/wslg
+  - /tmp/.X11-unix:/tmp/.X11-unix
+```
+
+This is only required for headed browser mode inside Docker on WSL2.
+Headless mode works without additional configuration.
+
+---
+
+# Authentication Contract
+
+Default auth route:
+
+```
+/pest-e2e/auth/login
+```
+
+Configurable via:
+
+```php
+config('pest-e2e.auth.route');
+```
+
+Security:
+
+* Disabled by default
+* Requires header (default: `X-Pest-E2E: 1`)
+* Tickets are single-use and short-lived
+
+---
+
+# Reports
+
+Reports are written to:
+
+```
+storage/framework/testing/pest-e2e/{runId}
+```
+
+Configurable via:
+
+```php
+config('pest-e2e.reports.dir');
+```
+
+Schema: `pest-e2e.v1`
+
+---
+
+# Final Positioning
+
+pestE2E is not browser testing for Laravel.
+
+It is a **contract-driven bridge** between Laravel and JS-native E2E systems.
+
+If you are building advanced frontend applications — page builders, editors, complex layouts — and you want Laravel to orchestrate while JavaScript owns the browser, this package is for you.

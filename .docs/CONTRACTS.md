@@ -1,11 +1,15 @@
 # CONTRACTS — Interop Contracts
 
 ## Env injection
+
 Injected into every Node process:
 - `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON)
 - `PEST_E2E_PARAMS_FILE` (absolute path)
+- `PEST_E2E_TEST_FILTER`
+- `PEST_E2E_BROWSE`
+- `PEST_E2E_DEBUG`
 
 ## Suite execution contract
 
@@ -13,13 +17,16 @@ Injected into every Node process:
 - The report must conform to the `pest-e2e.v1` schema
 - File path must match target config
 
-### Playwright Integration
+### Playwright integration
 
 When using the provided Playwright runner wrapper (`resources/js/pest-e2e/playwright/run.mjs`):
 - Playwright produces its native JSON report format
-- The wrapper automatically converts it to the canonical `pest-e2e.v1` schema
-- The canonical report is written to the configured report path
-- Raw Playwright report is preserved at `.pest-e2e/{runId}/playwright-report.json`
+- the wrapper converts it to canonical `pest-e2e.v1`
+- canonical report is written to the configured report path
+- raw Playwright report is preserved at:
+  - `{reportsDir}/{runId}/playwright-report.json`
+
+`{reportsDir}` defaults to `storage/framework/testing/pest-e2e`.
 
 ## call() contract
 - Node harness loads module + export
@@ -39,17 +46,22 @@ When using the provided Playwright runner wrapper (`resources/js/pest-e2e/playwr
   - `guard` (optional)
   - `meta` (optional)
 - JS calls a testing-only login endpoint
-- Server validates ticket and authenticates browser
-- Ticket is single-use, short-lived, testing-only
+- server validates ticket and authenticates browser
+- ticket is single-use, short-lived, testing-only
 
 ## Auth action contract
 
 The package provides a testing-only auth endpoint:
 
-POST `/.well-known/pest-e2e/auth/login`
+POST `/pest-e2e/auth/login` (default)
 
 The endpoint validates E2E auth tickets and delegates
 authentication to an application-defined action.
+
+### Route configuration
+- configurable: `config('pest-e2e.auth.route')`
+- enabled by: `PEST_E2E_AUTH_ROUTE_ENABLED=true`
+- gated by header (default): `X-Pest-E2E: 1` (configurable)
 
 ### Request
 ```json
@@ -61,28 +73,27 @@ authentication to an application-defined action.
 ```
 
 ### Responses
-- `200` `{ "ok": true }` (session mode)
-- `200` `{ "ok": true, "token": "..." }` (sanctum mode)
-- `401` `{ "ok": false, "message": "..." }` (invalid/expired/used ticket)
-- `501` `{ "ok": false, "message": "..." }` (Sanctum missing or unsupported)
+- `200` `{ }` (session mode)
+- `200` `{ "token": "..." }` (sanctum mode)
+- `401` `{ "message": "..." }` (invalid/expired/used ticket)
+- `501` `{ "message": "..." }` (Sanctum missing or unsupported)
 
 ### Security
-- The route is only loaded in `testing`
-- Requires header `X-Pest-E2E: 1` by default
+- the route is only loaded in `testing`
+- disabled by default
+- requires a header by default
 
 ### Contract
 
-`E2EAuthActionContract`
+`\ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract`
 
 Responsibilities:
-- Receive a validated ticket payload
-- Authenticate the browser session or issue a token
-- Return an HTTP response
+- receive a validated ticket payload
+- authenticate the browser session or issue a token
+- return an HTTP response
 
-The package binds a default implementation.
 Applications may rebind the contract to customize behavior.
 
 ### Stability
-
-- The HTTP endpoint path and request shape are **v1 stable**
-- The internal action binding is explicitly extensible
+- the HTTP endpoint request/response shape is **v1 stable**
+- internal action binding is explicitly extensible

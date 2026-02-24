@@ -85,9 +85,9 @@ loaded in `testing` and gated by a header (`X-Pest-E2E: 1` by default).
 ### Server-side responsibility
 
 The package provides the auth route, but delegates
-authentication behavior to a rebindable action:
+authentication behavior to a re-bindable action:
 
-- `E2EAuthActionContract`
+- `\ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract`
 
 Apps may rebind this action to customize:
 - guards
@@ -102,6 +102,9 @@ When spawning Node, the package injects:
 - `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON) OR `PEST_E2E_PARAMS_FILE`
+- `PEST_E2E_TEST_FILTER`
+- `PEST_E2E_BROWSE`
+- `PEST_E2E_DEBUG`
 
 ---
 
