@@ -20,6 +20,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Enums\AuthModeType;
+use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
 use ValcuAndrei\PestE2E\Runners\ProcessRunner;
 use ValcuAndrei\PestE2E\Runners\ServerRunner;
 use ValcuAndrei\PestE2E\Support\CliOptions;
@@ -217,7 +218,9 @@ final class E2ETargetHandle
         }
 
         try {
-            $serverRunner = new ServerRunner;
+            $serverType = ServerRunnerType::tryFrom(config()->string('pest-e2e.server.driver', ServerRunnerType::ARTISAN->value)) ?? ServerRunnerType::ARTISAN;
+
+            $serverRunner = new ServerRunner($serverType);
             [$report, $ok, $thrown] = $serverRunner->run(
                 /** @return array{0: JsonReportDTO, 1: bool, 2: ?\RuntimeException} */
                 callback: function (string $baseUrl) use ($runId): array {

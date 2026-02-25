@@ -20,5 +20,7 @@ return [
             'value' => env('PEST_E2E_PRUNE_VALUE', 30),
         ],
     ],
-
+    'server' => [
+        'driver' => env('PEST_E2E_SERVER_DRIVER', 'artisan'), // artisan - No other options yet
+    ],
 ];
