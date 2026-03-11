@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 import { mkdir } from 'fs/promises';
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { Convert } from './convert.mjs';
 import { getConfig } from '../core.mjs';
 
@@ -84,18 +85,22 @@ function runPlaywright(rawReportPath, testFilter, browse, debug) {
     return new Promise((resolve, reject) => {
         const startedAtMs = nowMs();
         let firstOutputAtMs = null;
+        const cli = resolvePlaywrightCli(process.cwd());
+        const additionalArgs = process.argv.slice(2);
+        const hasExplicitConfig = hasPlaywrightConfigArg(additionalArgs);
+        const configPath = resolvePlaywrightConfigPath(process.cwd());
         const args = [
-            'playwright',
+            ...cli.baseArgs,
             'test',
+            ...(!hasExplicitConfig ? ['--config', configPath] : []),
             ...(testFilter ? ['--grep', escapeRegex(testFilter)] : []),
             ...(browse || debug ? ['--headed'] : []),
             ...(debug ? ['--debug'] : []),
         ];
 
-        const additionalArgs = process.argv.slice(2);
         args.push(...additionalArgs);
 
-        const child = spawn('npx', args, {
+        const child = spawn(cli.command, args, {
             stdio: ['ignore', 'pipe', 'pipe'],
             cwd: process.cwd(),
             env: {
@@ -174,6 +179,42 @@ function tail(s, max = 4000) {
     s = (s ?? '').trim();
     if (!s) return '(no output)';
     return s.length > max ? `[truncated]\n${s.slice(-max)}` : s;
+}
+
+function resolvePlaywrightCli(cwd) {
+    const localPlaywrightCli = resolve(cwd, 'node_modules/.bin/playwright');
+
+    if (existsSync(localPlaywrightCli)) {
+        return {
+            command: localPlaywrightCli,
+            baseArgs: [],
+        };
+    }
+
+    return {
+        command: 'npx',
+        baseArgs: ['--no-install', 'playwright'],
+    };
+}
+
+function resolvePlaywrightConfigPath(cwd) {
+    const envConfig = process.env.PEST_E2E_PLAYWRIGHT_CONFIG;
+
+    if (envConfig && envConfig.trim() !== '') {
+        return envConfig;
+    }
+
+    return resolve(cwd, 'playwright.config.js');
+}
+
+function hasPlaywrightConfigArg(args) {
+    return args.some((arg, index) => {
+        if (arg === '--config') {
+            return typeof args[index + 1] === 'string' && args[index + 1] !== '';
+        }
+
+        return arg.startsWith('--config=');
+    });
 }
 
 function nowMs() {

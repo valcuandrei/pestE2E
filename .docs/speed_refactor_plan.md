@@ -177,7 +177,7 @@ Bind this runner to the contract by default.
 
 ---
 
-# Phase 2 — Reduce Playwright Cold Start
+# [x] Phase 2 — Reduce Playwright Cold Start
 
 Inside:
 
