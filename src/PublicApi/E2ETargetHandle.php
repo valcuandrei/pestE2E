@@ -228,7 +228,7 @@ final class E2ETargetHandle
         try {
             $serverType = ServerRunnerType::tryFrom(config()->string('pest-e2e.server.driver', ServerRunnerType::ARTISAN->value)) ?? ServerRunnerType::ARTISAN;
 
-            $serverRunner = new ServerRunner($serverType);
+            $serverRunner = ServerRunner::getOrCreate($serverType);
             [$report, $ok, $thrown] = $serverRunner->run(
                 /** @return array{0: JsonReportDTO, 1: bool, 2: ?\RuntimeException} */
                 callback: function (string $baseUrl) use ($runId): array {
@@ -246,7 +246,7 @@ final class E2ETargetHandle
 
                     return [$report, $ok, $thrown];
                 },
-                keepAliveOnFailure: CliOptions::$debug,
+                keepAliveOnFailure: true,
             );
         } catch (\Throwable $e) {
             $ok = false;

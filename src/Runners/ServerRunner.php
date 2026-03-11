@@ -14,6 +14,13 @@ use ValcuAndrei\PestE2E\Support\TimingProbe;
  */
 final class ServerRunner
 {
+    /**
+     * Shared server runners keyed by driver.
+     *
+     * @var array<string, self>
+     */
+    private static array $sharedRunners = [];
+
     private ?Process $process = null;
 
     private string $host = '127.0.0.1';
@@ -23,6 +30,32 @@ final class ServerRunner
     public function __construct(
         private readonly ServerRunnerType $type = ServerRunnerType::ARTISAN,
     ) {}
+
+    /**
+     * Get an existing shared server runner or create a new one.
+     */
+    public static function getOrCreate(ServerRunnerType $type = ServerRunnerType::ARTISAN): self
+    {
+        $key = $type->value;
+
+        if (! isset(self::$sharedRunners[$key])) {
+            self::$sharedRunners[$key] = new self($type);
+        }
+
+        return self::$sharedRunners[$key];
+    }
+
+    /**
+     * Stop and clear all shared server runners.
+     */
+    public static function stopAll(): void
+    {
+        foreach (self::$sharedRunners as $runner) {
+            $runner->stop();
+        }
+
+        self::$sharedRunners = [];
+    }
 
     /**
      * Start a managed Laravel server, run the callback, then stop the server.
@@ -50,7 +83,7 @@ final class ServerRunner
         try {
             return $callback($this->baseUrl());
         } finally {
-            if (! $keepAliveOnFailure) {
+            if (! $keepAliveOnFailure && ! $this->isSharedRunner()) {
                 $this->stop();
             }
         }
@@ -267,11 +300,19 @@ final class ServerRunner
 
         register_shutdown_function(function (): void {
             try {
-                $this->stop();
+                self::stopAll();
             } catch (\Throwable) {
                 // shutdown handlers must never throw
             }
         });
+    }
+
+    /**
+     * Check whether this runner is registered as shared.
+     */
+    private function isSharedRunner(): bool
+    {
+        return in_array($this, self::$sharedRunners, true);
     }
 
     private function canServeLaravelApp(): bool

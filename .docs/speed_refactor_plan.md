@@ -211,7 +211,7 @@ Expected improvement:
 
 ---
 
-# Phase 3 — Reuse Laravel Server
+# [x] Phase 3 — Reuse Laravel Server
 
 Currently each `->run()` boots a new Laravel server.
 
