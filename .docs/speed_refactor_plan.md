@@ -290,7 +290,7 @@ Warm mode must remain **opt-in initially**.
 
 ---
 
-# Phase 5 — Warm Execution
+# [x] Phase 5 — Warm Execution
 
 Execution flow:
 

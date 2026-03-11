@@ -9,6 +9,7 @@ use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use ValcuAndrei\PestE2E\Output\CaptureCurrentTestIdSubscriber;
+use ValcuAndrei\PestE2E\Output\StopJsRunnerSubscriber;
 use ValcuAndrei\PestE2E\Output\StopSharedServerSubscriber;
 
 /**
@@ -28,6 +29,7 @@ final class PestE2EPhpunitExtension implements Extension
     public function bootstrap(Configuration $configuration, Facade $facade, ParameterCollection $parameters): void
     {
         $facade->registerSubscriber(new CaptureCurrentTestIdSubscriber);
+        $facade->registerSubscriber(new StopJsRunnerSubscriber);
         $facade->registerSubscriber(new StopSharedServerSubscriber);
     }
 }

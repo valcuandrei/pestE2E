@@ -29,13 +29,17 @@ it('captures ws endpoint on start when provided', function () {
 });
 
 it('runs requests through the warm runner', function () {
+    putenv('PEST_E2E_WARM_WS_ENDPOINT=ws://localhost:3999/devtools/browser/test');
     $runner = new PlaywrightWarmRunner(new PlaywrightColdRunner(new ProcessRunner));
 
     $result = $runner->run(new JsRunRequestDTO(
-        command: 'php -r "echo \'warm\';"',
+        command: 'php -r "echo getenv(\'PEST_E2E_WARM_WS_ENDPOINT\');"',
         workingDirectory: getcwd(),
     ));
 
     expect($result->isSuccessful())->toBeTrue()
-        ->and($result->stdout)->toBe('warm');
+        ->and($result->stdout)->toBe('ws://localhost:3999/devtools/browser/test');
+
+    $runner->stop();
+    putenv('PEST_E2E_WARM_WS_ENDPOINT');
 });

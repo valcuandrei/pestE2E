@@ -58,9 +58,17 @@ final readonly class E2ERunner
         $runId ??= $this->runIdGenerator->generate();
         $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
         $plan = $this->planBuilder->build($context, $options);
-        $this->jsRunner->start();
+        $runnerCapabilities = $this->jsRunner->capabilities();
+
+        if (! $this->jsRunner->isRunning()) {
+            $this->jsRunner->start();
+        }
+
         $runResult = $this->jsRunner->run(JsRunRequestDTO::fromProcessPlan($plan));
-        $this->jsRunner->stop();
+
+        if (! $runnerCapabilities->supportsPersistentRuntime) {
+            $this->jsRunner->stop();
+        }
 
         try {
             app(ReportsPrunerAction::class)->handle();

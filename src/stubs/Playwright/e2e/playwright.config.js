@@ -12,6 +12,9 @@ export default {
     baseURL: process.env.APP_URL || 'http://localhost',
     testIdAttribute: 'data-test',
     storageState: storageStatePath(),
+    connectOptions: process.env.PEST_E2E_WARM_WS_ENDPOINT
+      ? { wsEndpoint: process.env.PEST_E2E_WARM_WS_ENDPOINT }
+      : undefined,
   },
   projects: [
     {
