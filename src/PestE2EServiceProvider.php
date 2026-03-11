@@ -16,6 +16,7 @@ use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Runners\Js\PlaywrightColdRunner;
+use ValcuAndrei\PestE2E\Runners\Js\PlaywrightWarmRunner;
 use ValcuAndrei\PestE2E\Support\CacheAuthTicketStore;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
@@ -38,7 +39,7 @@ final class PestE2EServiceProvider extends ServiceProvider
         $this->app->bind(AuthTicketIssuerContract::class, LaravelAuthTicketIssuer::class);
         $this->app->bind(ParamsFileWriterContract::class, TempParamsFileWriter::class);
         $this->app->bind(E2EAuthActionContract::class, DefaultE2EAuthAction::class);
-        $this->app->bind(JsRunnerContract::class, PlaywrightColdRunner::class);
+        $this->app->singleton(JsRunnerContract::class, fn (): JsRunnerContract => $this->resolveJsRunner());
     }
 
     public function boot(): void
@@ -78,5 +79,24 @@ final class PestE2EServiceProvider extends ServiceProvider
         if (config()->boolean('pest-e2e.auth.route_enabled', false)) {
             $this->loadRoutesFrom(__DIR__.'/../routes/pest-e2e-testing.php');
         }
+    }
+
+    /**
+     * Resolve the JS runner implementation from configuration.
+     */
+    private function resolveJsRunner(): JsRunnerContract
+    {
+        $driver = config()->string('pest-e2e.js_runner.driver', 'playwright');
+        $mode = config()->string('pest-e2e.js_runner.mode', 'cold');
+
+        if ($driver !== 'playwright') {
+            return $this->app->make(PlaywrightColdRunner::class);
+        }
+
+        if ($mode === 'warm') {
+            return $this->app->make(PlaywrightWarmRunner::class);
+        }
+
+        return $this->app->make(PlaywrightColdRunner::class);
     }
 }

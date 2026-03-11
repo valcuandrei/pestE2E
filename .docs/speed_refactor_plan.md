@@ -242,7 +242,7 @@ Expected improvement:
 
 ---
 
-# Phase 4 — Add PlaywrightWarmRunner
+# [x] Phase 4 — Add PlaywrightWarmRunner
 
 Create:
 

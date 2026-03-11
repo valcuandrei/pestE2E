@@ -26,4 +26,8 @@ return [
     'timing' => [
         'enabled' => env('PEST_E2E_TIMING', false),
     ],
+    'js_runner' => [
+        'driver' => env('PEST_E2E_JS_RUNNER_DRIVER', 'playwright'),
+        'mode' => env('PEST_E2E_JS_RUNNER_MODE', 'cold'),
+    ],
 ];
