@@ -27,6 +27,7 @@ use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
+use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
  * Returned by e2e('frontend')
@@ -207,6 +208,13 @@ final class E2ETargetHandle
         $runId = $this->root->generateRunId();
         $startedAt = microtime(true);
         $parentTestName = $this->currentTestName();
+        TimingProbe::mark('php_test_start', [
+            'target' => $this->target,
+            'runId' => $runId,
+            'browse' => CliOptions::$browse,
+            'debug' => CliOptions::$debug,
+            'testFilter' => $this->testFilter,
+        ]);
 
         $report = null;
         $ok = false;
@@ -248,6 +256,12 @@ final class E2ETargetHandle
         }
 
         $durationSeconds = microtime(true) - $startedAt;
+        TimingProbe::mark('php_test_end', [
+            'target' => $this->target,
+            'runId' => $runId,
+            'ok' => $ok,
+            'durationMs' => max(0, (int) round($durationSeconds * 1000)),
+        ]);
 
         $lines = $this->buildRunLines(
             target: $report instanceof JsonReportDTO ? $report->target : $this->target,

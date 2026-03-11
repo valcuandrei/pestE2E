@@ -8,6 +8,8 @@ use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 use ValcuAndrei\PestE2E\Tests\Fakes\FakeParamsFileWriter;
 
 it('injects target and run id even when there are no params', function () {
+    putenv('PEST_E2E_TIMING=0');
+    $_ENV['PEST_E2E_TIMING'] = '0';
     $writer = new FakeParamsFileWriter;
     $builder = new ProcessPlanBuilder($writer);
 
@@ -30,9 +32,39 @@ it('injects target and run id even when there are no params', function () {
 
     expect($env['PEST_E2E_TARGET'])->toBe('frontend')
         ->and($env['PEST_E2E_RUN_ID'])->toBe('run-123')
+        ->and($env['PEST_E2E_TIMING'])->toBe('0')
         ->and(isset($env['PEST_E2E_PARAMS']))->toBeFalse()
         ->and(isset($env['PEST_E2E_PARAMS_FILE']))->toBeFalse()
         ->and($plan->hasParams())->toBeFalse();
+
+    putenv('PEST_E2E_TIMING');
+    unset($_ENV['PEST_E2E_TIMING']);
+});
+
+it('passes timing flag to js runner env', function () {
+    putenv('PEST_E2E_TIMING=1');
+    $_ENV['PEST_E2E_TIMING'] = '1';
+    $writer = new FakeParamsFileWriter;
+    $builder = new ProcessPlanBuilder($writer);
+
+    $target = new TargetConfigDTO(
+        name: 'frontend',
+        dir: 'js',
+        command: 'npx playwright test',
+        reportType: 'json',
+        reportPath: 'reports/report.json',
+        env: [],
+        params: [],
+        artifactsDir: null,
+    );
+
+    $ctx = RunContextDTO::make($target, 'run-timing');
+    $plan = $builder->build($ctx);
+
+    expect($plan->command->getMergedEnv()['PEST_E2E_TIMING'])->toBe('1');
+
+    putenv('PEST_E2E_TIMING');
+    unset($_ENV['PEST_E2E_TIMING']);
 });
 
 it('uses inline params when JSON is small enough', function () {

@@ -13,6 +13,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Support\CliOptions;
+use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
  * @internal
@@ -63,6 +64,7 @@ final readonly class ProcessPlanBuilder
             'PEST_E2E_TEST_FILTER' => $context->testFilter ?? '',
             'PEST_E2E_BROWSE' => CliOptions::$browse ? '1' : '0',
             'PEST_E2E_DEBUG' => CliOptions::$debug ? '1' : '0',
+            'PEST_E2E_TIMING' => TimingProbe::isEnabled() ? '1' : '0',
         ]);
 
         $options = $options->withTimeoutSeconds(

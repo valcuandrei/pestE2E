@@ -72,19 +72,25 @@ Warm runner reuses a persistent browser.
 
 ---
 
-# Phase 0 — Baseline Measurement
+# [x] Phase 0 — Baseline Measurement
 
 ## Tasks
 
 Add timing instrumentation for:
 
-- PHP test start
-- server runner start
-- server ready
-- JS runner spawn
-- Playwright bootstrap
-- test execution
-- report conversion
+- [x] PHP test start
+- [x] server runner start
+- [x] server ready
+- [x] JS runner spawn
+- [x] Playwright bootstrap
+- [x] test execution
+- [x] report conversion
+
+Instrumentation format (opt-in):
+
+- Enable with `PEST_E2E_TIMING=true`
+- Marker prefix: `[pest-e2e:timing]`
+- Emitted as JSON payload lines to `stderr` from both PHP and JS paths
 
 ## Benchmarks
 

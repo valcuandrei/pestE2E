@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E\Runners;
 use Symfony\Component\Process\Process;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessResultDTO;
+use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
  * @internal
@@ -19,6 +20,9 @@ final class ProcessRunner
     public function run(ProcessPlanDTO $plan): ProcessResultDTO
     {
         $start = microtime(true);
+        TimingProbe::mark('js_runner_spawn', [
+            'cwd' => $plan->command->workingDirectory,
+        ]);
 
         $process = Process::fromShellCommandline(
             command: $plan->command->command,

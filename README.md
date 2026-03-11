@@ -275,6 +275,22 @@ php artisan test --debug
 * `--browse` / `--headed` → runs browser in headed mode
 * `--debug` → enables debug mode and implies headed mode
 
+## Timing Instrumentation
+
+Enable baseline timing markers:
+
+```dotenv
+PEST_E2E_TIMING=true
+```
+
+Markers are emitted to `stderr` with prefix:
+
+```text
+[pest-e2e:timing]
+```
+
+Each marker is JSON payload with `phase`, `atMs`, and optional `durationMs`.
+
 ## Headed Mode in Sail (WSL2 + WSLg)
 
 If you run Pest inside Sail on Windows (WSL2) and want headed mode, forward WSLg into the container by adding this to your `laravel.test` service:

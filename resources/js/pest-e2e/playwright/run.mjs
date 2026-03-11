@@ -10,6 +10,7 @@ import { getConfig } from '../core.mjs';
 async function main() {
     const { rawReportPath, canonicalReportPath, target, runId, testFilter, browse, debug } = getConfig();
     const convert = new Convert(rawReportPath, canonicalReportPath, target, runId);
+    let conversionStartMs = null;
 
     await mkdir(dirname(rawReportPath), { recursive: true });
     await mkdir(dirname(canonicalReportPath), { recursive: true });
@@ -17,9 +18,12 @@ async function main() {
     let exitCode = 1;
 
     try {
-        const { code, stdout, stderr } = await runPlaywright(rawReportPath, testFilter, browse, debug);
+        const { code, stdout, stderr, bootstrapMs, executionMs } = await runPlaywright(rawReportPath, testFilter, browse, debug);
         exitCode = code;
+        emitTiming('playwright_bootstrap', { durationMs: bootstrapMs });
+        emitTiming('test_execution', { durationMs: executionMs });
 
+        conversionStartMs = nowMs();
         await convert.init();
 
         if (exitCode !== 0 && (stdout.trim().startsWith('Error:') || stderr.trim().startsWith('Error:'))) {
@@ -34,13 +38,26 @@ async function main() {
 
         try {
             await convert.convert();
+            emitTiming('report_conversion', {
+                durationMs: Math.max(0, Math.round(nowMs() - conversionStartMs)),
+            });
         } catch (convertError) {
+            emitTiming('report_conversion', {
+                durationMs: Math.max(0, Math.round(nowMs() - conversionStartMs)),
+                ok: false,
+            });
             await convert.writeSyntheticFailureReport(
                 `Playwright exited with code ${exitCode}.\n\nSTDERR:\n${tail(stripAnsi(stderr))}\n\nSTDOUT:\n${tail(stripAnsi(stdout))}`
             );
         }
     } catch (error) {
         const message = error?.stack || error?.message || String(error);
+        if (conversionStartMs !== null) {
+            emitTiming('report_conversion', {
+                durationMs: Math.max(0, Math.round(nowMs() - conversionStartMs)),
+                ok: false,
+            });
+        }
 
         try {
             await convert.writeSyntheticFailureReport(message);
@@ -65,6 +82,8 @@ async function main() {
  */
 function runPlaywright(rawReportPath, testFilter, browse, debug) {
     return new Promise((resolve, reject) => {
+        const startedAtMs = nowMs();
+        let firstOutputAtMs = null;
         const args = [
             'playwright',
             'test',
@@ -89,14 +108,31 @@ function runPlaywright(rawReportPath, testFilter, browse, debug) {
         let stdout = '';
         let stderr = '';
 
-        child.stdout.on('data', (d) => { stdout += d.toString('utf8'); });
-        child.stderr.on('data', (d) => { stderr += d.toString('utf8'); });
+        child.stdout.on('data', (d) => {
+            if (firstOutputAtMs === null) {
+                firstOutputAtMs = nowMs();
+            }
+
+            stdout += d.toString('utf8');
+        });
+        child.stderr.on('data', (d) => {
+            if (firstOutputAtMs === null) {
+                firstOutputAtMs = nowMs();
+            }
+
+            stderr += d.toString('utf8');
+        });
 
         child.on('close', (code) => {
+            const finishedAtMs = nowMs();
+            const bootstrapEndMs = firstOutputAtMs ?? finishedAtMs;
+
             resolve({
                 code: typeof code === 'number' ? code : 1,
                 stdout,
                 stderr,
+                bootstrapMs: Math.max(0, Math.round(bootstrapEndMs - startedAtMs)),
+                executionMs: Math.max(0, Math.round(finishedAtMs - bootstrapEndMs)),
             });
         });
 
@@ -138,6 +174,24 @@ function tail(s, max = 4000) {
     s = (s ?? '').trim();
     if (!s) return '(no output)';
     return s.length > max ? `[truncated]\n${s.slice(-max)}` : s;
+}
+
+function nowMs() {
+    return Date.now();
+}
+
+function emitTiming(phase, meta = {}) {
+    if (process.env.PEST_E2E_TIMING !== '1') {
+        return;
+    }
+
+    const payload = {
+        phase,
+        atMs: nowMs(),
+        ...meta,
+    };
+
+    console.error(`[pest-e2e:timing] ${JSON.stringify(payload)}`);
 }
 
 main().catch((error) => {

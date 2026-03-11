@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E\Runners;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
+use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
  * @internal
@@ -64,6 +65,11 @@ final class ServerRunner
             return;
         }
 
+        $startedAt = microtime(true);
+        TimingProbe::mark('server_runner_start', [
+            'driver' => $this->type->value,
+        ]);
+
         $this->port = $this->findFreePort($this->host);
 
         $env = array_merge($_ENV, [
@@ -89,6 +95,12 @@ final class ServerRunner
             timeoutSeconds: 12,
             probePath: config()->string('pest-e2e.auth.route', '/__pest_e2e_ping'),
         );
+
+        TimingProbe::mark('server_ready', [
+            'baseUrl' => $this->baseUrl(),
+            'port' => $this->port,
+            'durationMs' => TimingProbe::elapsedMs($startedAt),
+        ]);
     }
 
     /**
