@@ -6,6 +6,7 @@ namespace ValcuAndrei\PestE2E\Runners\Js;
 
 use RuntimeException;
 use Symfony\Component\Process\Process;
+use Throwable;
 use ValcuAndrei\PestE2E\Contracts\JsRunnerContract;
 use ValcuAndrei\PestE2E\DTO\JsRunnerCapabilitiesDTO;
 use ValcuAndrei\PestE2E\DTO\JsRunRequestDTO;
@@ -27,6 +28,8 @@ final class PlaywrightWarmRunner implements JsRunnerContract
 
     private string $workingDirectory = '';
 
+    private bool $fallbackToCold = false;
+
     public function __construct(
         private readonly PlaywrightColdRunner $coldRunner,
     ) {}
@@ -42,13 +45,26 @@ final class PlaywrightWarmRunner implements JsRunnerContract
 
         $this->workingDirectory = $this->workingDirectory !== '' ? $this->workingDirectory : $this->currentWorkingDirectory();
         $this->running = true;
+        $this->fallbackToCold = false;
         $this->wsEndpoint = $this->resolveWsEndpoint();
 
-        if ($this->wsEndpoint !== null) {
+        if ($this->wsEndpoint !== null && $this->isValidWsEndpoint($this->wsEndpoint)) {
             return;
         }
 
-        $this->startBrowserServerProcess();
+        if ($this->wsEndpoint !== null && ! $this->isValidWsEndpoint($this->wsEndpoint)) {
+            $this->activateColdFallback('Invalid warm wsEndpoint was provided; using cold runner.');
+
+            return;
+        }
+
+        try {
+            $this->startBrowserServerProcess();
+        } catch (Throwable $exception) {
+            $this->activateColdFallback(
+                'Warm runner startup failed; falling back to cold runner. '.$exception->getMessage()
+            );
+        }
     }
 
     /**
@@ -70,8 +86,14 @@ final class PlaywrightWarmRunner implements JsRunnerContract
             $this->start();
         }
 
-        if (! is_string($this->wsEndpoint) || $this->wsEndpoint === '') {
-            throw new RuntimeException('Warm runner did not resolve a Playwright websocket endpoint.');
+        if ($this->fallbackToCold) {
+            return $this->runCold($request);
+        }
+
+        if (! is_string($this->wsEndpoint) || ! $this->isValidWsEndpoint($this->wsEndpoint)) {
+            $this->activateColdFallback('Warm runner wsEndpoint is invalid; using cold runner.');
+
+            return $this->runCold($request);
         }
 
         $warmRequest = new JsRunRequestDTO(
@@ -85,7 +107,27 @@ final class PlaywrightWarmRunner implements JsRunnerContract
             inheritTty: $request->inheritTty,
         );
 
-        return $this->coldRunner->run($warmRequest);
+        try {
+            $result = $this->coldRunner->run($warmRequest);
+
+            if ($result->isSuccessful()) {
+                return $result;
+            }
+
+            if (! $this->looksLikeWarmFailure($result->stderr, $result->stdout)) {
+                return $result;
+            }
+
+            $this->activateColdFallback('Warm runner execution failed; retrying once with cold runner.');
+
+            return $this->runCold($request);
+        } catch (Throwable $exception) {
+            $this->activateColdFallback(
+                'Warm runner threw during execution; retrying once with cold runner. '.$exception->getMessage()
+            );
+
+            return $this->runCold($request);
+        }
     }
 
     /**
@@ -94,6 +136,7 @@ final class PlaywrightWarmRunner implements JsRunnerContract
     public function stop(): void
     {
         $this->running = false;
+        $this->fallbackToCold = false;
         $this->wsEndpoint = null;
         $this->startupStdout = '';
         $this->startupStderr = '';
@@ -243,5 +286,95 @@ final class PlaywrightWarmRunner implements JsRunnerContract
         $cwd = getcwd();
 
         return is_string($cwd) ? $cwd : '.';
+    }
+
+    /**
+     * Check if a websocket endpoint is valid for Playwright connect.
+     */
+    private function isValidWsEndpoint(string $endpoint): bool
+    {
+        return str_starts_with($endpoint, 'ws://') || str_starts_with($endpoint, 'wss://');
+    }
+
+    /**
+     * Run the request with cold runner semantics.
+     */
+    private function runCold(JsRunRequestDTO $request): JsRunResultDTO
+    {
+        return $this->coldRunner->run(new JsRunRequestDTO(
+            command: $request->command,
+            workingDirectory: $request->workingDirectory,
+            env: $this->withoutWarmEnv($request->env),
+            timeoutSeconds: $request->timeoutSeconds,
+            inheritTty: $request->inheritTty,
+        ));
+    }
+
+    /**
+     * Remove warm-mode env variables for cold fallback.
+     *
+     * @param  array<string, string|null>  $env
+     * @return array<string, string|null>
+     */
+    private function withoutWarmEnv(array $env): array
+    {
+        unset($env['PEST_E2E_WARM_WS_ENDPOINT'], $env['PEST_E2E_WARM_MODE']);
+
+        return $env;
+    }
+
+    /**
+     * Detect warm-run failures that should trigger fallback.
+     */
+    private function looksLikeWarmFailure(string $stderr, string $stdout): bool
+    {
+        $haystack = strtolower($stderr."\n".$stdout);
+        $signals = [
+            'wsendpoint',
+            'browsertype.connect',
+            'websocket',
+            'econnrefused',
+            'target closed',
+            'browser has been closed',
+            'failed to connect',
+        ];
+
+        foreach ($signals as $signal) {
+            if (str_contains($haystack, $signal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Activate cold fallback mode and emit a warning.
+     */
+    private function activateColdFallback(string $message): void
+    {
+        $this->fallbackToCold = true;
+
+        if ($this->browserServerProcess instanceof Process) {
+            $this->browserServerProcess->stop(2);
+            $this->browserServerProcess = null;
+        }
+
+        $this->wsEndpoint = null;
+        $this->warn($message);
+    }
+
+    /**
+     * Emit a warning message in environments with or without Laravel.
+     */
+    private function warn(string $message): void
+    {
+        if (function_exists('logger')) {
+            logger()->warning($message);
+
+            return;
+        }
+
+        fwrite(STDERR, "[pest-e2e] {$message}\n");
     }
 }

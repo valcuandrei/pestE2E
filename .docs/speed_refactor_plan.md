@@ -313,7 +313,7 @@ Subsequent runs: ~2–3s
 
 ---
 
-# Phase 6 — Failure Fallback
+# [x] Phase 6 — Failure Fallback
 
 Warm runner must never break the test suite.
 
