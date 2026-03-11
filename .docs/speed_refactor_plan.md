@@ -108,7 +108,7 @@ Warm run ≤ 2s
 
 ---
 
-# Phase 1 — Introduce JsRunnerContract
+# [x] Phase 1 — Introduce JsRunnerContract
 
 ## Goal
 

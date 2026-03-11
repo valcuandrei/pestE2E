@@ -10,10 +10,12 @@ use RuntimeException;
 use Throwable;
 use ValcuAndrei\PestE2E\Actions\ReportsPrunerAction;
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
+use ValcuAndrei\PestE2E\Contracts\JsRunnerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportErrorDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
+use ValcuAndrei\PestE2E\DTO\JsRunRequestDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Enums\TestStatusType;
@@ -31,7 +33,7 @@ final readonly class E2ERunner
     public function __construct(
         private TargetRegistry $registry,
         private ProcessPlanBuilder $planBuilder,
-        private ProcessRunner $processRunner,
+        private JsRunnerContract $jsRunner,
         private JsonReportReader $reportReader,
         private RunIdGeneratorContract $runIdGenerator,
     ) {}
@@ -56,7 +58,9 @@ final readonly class E2ERunner
         $runId ??= $this->runIdGenerator->generate();
         $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
         $plan = $this->planBuilder->build($context, $options);
-        $runResult = $this->processRunner->run($plan);
+        $this->jsRunner->start();
+        $runResult = $this->jsRunner->run(JsRunRequestDTO::fromProcessPlan($plan));
+        $this->jsRunner->stop();
 
         try {
             app(ReportsPrunerAction::class)->handle();

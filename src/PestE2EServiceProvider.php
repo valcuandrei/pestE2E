@@ -11,9 +11,11 @@ use ValcuAndrei\PestE2E\Commands\PruneReportsCommand;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
+use ValcuAndrei\PestE2E\Contracts\JsRunnerContract;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Runners\Js\PlaywrightColdRunner;
 use ValcuAndrei\PestE2E\Support\CacheAuthTicketStore;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
@@ -36,6 +38,7 @@ final class PestE2EServiceProvider extends ServiceProvider
         $this->app->bind(AuthTicketIssuerContract::class, LaravelAuthTicketIssuer::class);
         $this->app->bind(ParamsFileWriterContract::class, TempParamsFileWriter::class);
         $this->app->bind(E2EAuthActionContract::class, DefaultE2EAuthAction::class);
+        $this->app->bind(JsRunnerContract::class, PlaywrightColdRunner::class);
     }
 
     public function boot(): void

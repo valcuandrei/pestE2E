@@ -13,8 +13,14 @@ use Throwable;
  */
 final class TimingProbe
 {
+    /**
+     * @var string
+     */
     private const PREFIX = '[pest-e2e:timing]';
 
+    /**
+     * Check if the timing probe is enabled.
+     */
     public static function isEnabled(?string $rawValue = null): bool
     {
         if ($rawValue !== null) {
@@ -60,16 +66,25 @@ final class TimingProbe
         fwrite(STDERR, self::PREFIX.' '.$encoded.PHP_EOL);
     }
 
+    /**
+     * Get the elapsed milliseconds since the start time.
+     */
     public static function elapsedMs(float $start): int
     {
         return max(0, (int) round((microtime(true) - $start) * 1000));
     }
 
+    /**
+     * Get the current timestamp in milliseconds.
+     */
     private static function timestampMs(): int
     {
         return (int) round(microtime(true) * 1000);
     }
 
+    /**
+     * Convert a string to a boolean.
+     */
     private static function toBool(string $value): bool
     {
         $normalized = strtolower(trim($value));
@@ -77,6 +92,9 @@ final class TimingProbe
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
+    /**
+     * Read the config value.
+     */
     private static function readConfigValue(): ?bool
     {
         if (! function_exists('app')) {
