@@ -334,7 +334,7 @@ continue execution
 
 ---
 
-# Phase 7 — Validation
+# [x] Phase 7 — Validation
 
 Verify that:
 
@@ -345,6 +345,24 @@ Verify that:
 * no orphan processes remain
 
 Run full benchmark suite again.
+
+## Validation run (current)
+
+- Canonical report schema remains `pest-e2e.v1`
+- Public PHP API unchanged (`e2e(...)->run()/only()/runTest()` paths still green)
+- Browse mode verified: `tests/Browser/UserProfileTest.php --browse` passes
+- Debug mode verified: `tests/Browser/UserProfileTest.php --debug` passes
+- Failure path verified: `tests/Unit/E2EFailuresTest.php` passes
+- Process cleanup verified: no lingering `artisan serve`/Playwright warm runner processes after suite
+
+## Benchmarks (UserProfile test)
+
+- Single cold run: `7.70s` (E2E inner duration ~`711ms`)
+- Single warm run: `7.82s` (E2E inner duration ~`712ms`)
+- 5 sequential cold runs: `7.95s`, `7.71s`, `7.69s`, `7.39s`, `7.50s` (avg `7.65s`)
+- 5 sequential warm runs: `8.02s`, `7.96s`, `7.57s`, `7.80s`, `7.57s` (avg `7.78s`)
+
+Note: warm mode correctness is validated and fallback is in place, but benchmark gains are not yet visible in this scenario. Further warm-run optimization is still needed before switching defaults.
 
 ---
 
