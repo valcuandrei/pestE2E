@@ -7,7 +7,7 @@ namespace ValcuAndrei\PestE2E\Readers;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Exceptions\JsonReportParserException;
-use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
+use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
 
 /**
  * @internal
@@ -15,25 +15,18 @@ use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
 final readonly class JsonReportReader
 {
     /**
-     * @param  JsonReportParser  $parser  parser
+     * @param  JsonParserContract  $parser  parser
      */
     public function __construct(
-        private JsonReportParser $parser,
+        private JsonParserContract $parser,
     ) {}
 
     /**
      * Read the report for a run.
      */
-    public function readForRun(RunContextDTO $context): JsonReportDTO
+    public function readForRun(RunContextDTO $context, string $stdout): JsonReportDTO
     {
-        $path = str_replace('{runId}', $context->runId, $context->target->reportPath);
-
-        // If path is relative, make it relative to the target directory
-        if (! str_starts_with($path, '/')) {
-            $path = $context->target->dir.'/'.$path;
-        }
-
-        $report = $this->parser->parseFile($path);
+        $report = $this->parser->parse($stdout, $context->target->name, $context->runId);
 
         if ($report->target !== $context->target->name) {
             throw new JsonReportParserException(

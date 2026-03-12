@@ -19,6 +19,7 @@ use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Enums\TestStatusType;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 
 /**
  * @internal
@@ -31,7 +32,7 @@ final readonly class E2ERunner
     public function __construct(
         private TargetRegistry $registry,
         private ProcessPlanBuilder $planBuilder,
-        private ProcessRunner $processRunner,
+        private JsWorkerContract $jsWorker,
         private JsonReportReader $reportReader,
         private RunIdGeneratorContract $runIdGenerator,
     ) {}
@@ -56,7 +57,7 @@ final readonly class E2ERunner
         $runId ??= $this->runIdGenerator->generate();
         $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
         $plan = $this->planBuilder->build($context, $options);
-        $runResult = $this->processRunner->run($plan);
+        $runResult = $this->jsWorker->run($plan);
 
         try {
             app(ReportsPrunerAction::class)->handle();
@@ -65,7 +66,7 @@ final readonly class E2ERunner
         }
 
         try {
-            $report = $this->reportReader->readForRun($context);
+            $report = $this->reportReader->readForRun($context, $runResult->stdout);
 
             if ($runResult->exitCode !== 0 && $report->isSuccessful()) {
                 $report = $report->withStats($report->stats->withFailed(1));

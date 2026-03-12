@@ -21,6 +21,10 @@ use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
+use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
+use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
+use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
+use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
 
 /**
  * Simple array-based auth ticket store for testing
@@ -104,6 +108,8 @@ if (! function_exists('e2e')) {
                 $container->bind(AuthTicketIssuerContract::class, NullAuthTicketIssuer::class);
                 $container->bind(ParamsFileWriterContract::class, TempParamsFileWriter::class);
                 $container->bind(E2EAuthActionContract::class, DefaultE2EAuthAction::class);
+                $container->bind(JsWorkerContract::class, PlaywrightWorker::class);
+                $container->bind(JsonParserContract::class, PlaywrightParser::class);
             }
 
             if (! $container->bound(E2E::class)) {
