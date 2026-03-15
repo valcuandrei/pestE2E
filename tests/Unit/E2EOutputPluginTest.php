@@ -29,7 +29,7 @@ it('flushes output store via the Pest plugin', function () {
     expect($exitCode)->toBe(0)
         ->and($rendered)->toContain('first line')
         ->and($rendered)->toContain('second line')
-        ->and($store->isEmpty())->toBeTrue();
+        ->and(app(E2EOutputStore::class)->flush())->toBe([]);
 });
 
 it('groups entries by parent test name when flushing', function () {

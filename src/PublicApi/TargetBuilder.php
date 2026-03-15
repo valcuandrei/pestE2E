@@ -14,12 +14,6 @@ final class TargetBuilder
 {
     private ?string $dir = null;
 
-    private ?string $command = null;
-
-    private ?string $reportType = null;
-
-    private ?string $reportPath = null;
-
     /** @var array<string,string|null> */
     private array $env = [];
 
@@ -36,27 +30,6 @@ final class TargetBuilder
     public function dir(string $dir): self
     {
         $this->dir = $dir;
-
-        return $this;
-    }
-
-    /**
-     * Set the command of the target.
-     */
-    public function command(string $command): self
-    {
-        $this->command = $command;
-
-        return $this;
-    }
-
-    /**
-     * Set the report of the target.
-     */
-    public function report(string $type, string $path): self
-    {
-        $this->reportType = $type;
-        $this->reportPath = $path;
 
         return $this;
     }
@@ -97,20 +70,9 @@ final class TargetBuilder
             throw new RuntimeException("E2E target '{$this->name}' is missing dir().");
         }
 
-        if ($this->command === null) {
-            throw new RuntimeException("E2E target '{$this->name}' is missing command().");
-        }
-
-        if ($this->reportType === null || $this->reportPath === null) {
-            throw new RuntimeException("E2E target '{$this->name}' is missing report(type, path).");
-        }
-
         return new TargetConfigDTO(
             name: $this->name,
             dir: $this->dir,
-            command: $this->command,
-            reportType: $this->reportType,
-            reportPath: $this->reportPath,
             env: $this->env,
             params: $this->params,
         );

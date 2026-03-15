@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\DTO;
 
-use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
-
 /**
  * @internal
  */
 final readonly class JsonReportDTO
 {
+    public const SCHEMA_V1 = 'pest-e2e.v1';
+
     /**
      * @param  array<int, JsonReportTestDTO>  $tests  (optional) tests
      */
@@ -251,7 +251,7 @@ final readonly class JsonReportDTO
     public static function fake(): self
     {
         return new self(
-            schema: JsonReportParser::SCHEMA_V1,
+            schema: self::SCHEMA_V1,
             target: 'target',
             runId: 'runId',
             stats: JsonReportStatsDTO::fake(),

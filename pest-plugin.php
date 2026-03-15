@@ -8,9 +8,12 @@ use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
+use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
+use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\AuthTicketDTO;
+use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
 use ValcuAndrei\PestE2E\PestE2EServiceProvider;
 use ValcuAndrei\PestE2E\Plugin as PestE2EPlugin;
 use ValcuAndrei\PestE2E\PublicApi\E2E;
@@ -21,10 +24,7 @@ use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
-use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
-use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
-use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
 
 /**
  * Simple array-based auth ticket store for testing
@@ -115,7 +115,7 @@ if (! function_exists('e2e')) {
             if (! $container->bound(E2E::class)) {
                 $container->bind(E2E::class, function ($container) {
                     return new E2E(
-                        $container->make(E2E::class),
+                        $container->make(\ValcuAndrei\PestE2E\E2E::class),
                         $container
                     );
                 });

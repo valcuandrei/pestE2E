@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Readers;
 
+use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Exceptions\JsonReportParserException;
-use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
 
 /**
  * @internal

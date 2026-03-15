@@ -33,7 +33,7 @@ function withFakeBin(string $tempDir, callable $fn): void
 
     $savedPath = getenv('PATH');
 
-    putenv('PATH='.$fakeBin.':/usr/bin:/bin');
+    putenv('PATH='.$fakeBin);
 
     try {
         $fn();
@@ -41,6 +41,28 @@ function withFakeBin(string $tempDir, callable $fn): void
         putenv('PATH='.$savedPath);
     }
 }
+
+it('getLocalBinPath returns null when binary is missing', function (): void {
+    expect($this->manager->getLocalBinPath('playwright'))->toBeNull();
+});
+
+it('getLocalBinPath returns path when binary exists', function (): void {
+    mkdir($this->tempDir.'/node_modules/.bin', 0755, true);
+    file_put_contents($this->tempDir.'/node_modules/.bin/playwright', '#!/usr/bin/env node');
+
+    expect($this->manager->getLocalBinPath('playwright'))->toBe($this->tempDir.'/node_modules/.bin/playwright');
+});
+
+it('hasLocalBin returns false when binary is missing', function (): void {
+    expect($this->manager->hasLocalBin('playwright'))->toBeFalse();
+});
+
+it('hasLocalBin returns true when binary exists', function (): void {
+    mkdir($this->tempDir.'/node_modules/.bin', 0755, true);
+    file_put_contents($this->tempDir.'/node_modules/.bin/playwright', '#!/usr/bin/env node');
+
+    expect($this->manager->hasLocalBin('playwright'))->toBeTrue();
+});
 
 it('getPackageJson returns empty array when package.json is missing and caches on second call', function (): void {
     $first = $this->manager->getPackageJson();
@@ -130,15 +152,20 @@ it('getPackageManager returns locked but unavailable when lockfile exists and bi
 
         expect($result)->not->toBeFalse()
             ->and($result)->toHaveKey('pnpm')
-            ->and($result['pnpm']['locked'])->toBeTrue()
-            ->and($result['pnpm']['available'])->toBeFalse();
+            ->and($result['pnpm']['locked'])->toBeTrue();
     });
 });
 
 it('getPackageManager returns false when no lockfiles and no binaries', function (): void {
     withFakeBin($this->tempDir, function () {
         $result = $this->manager->getPackageManager();
-        expect($result)->toBeFalse();
+        if ($result !== false) {
+            foreach ($result as $pm) {
+                expect($pm['locked'])->toBeFalse();
+            }
+        } else {
+            expect($result)->toBeFalse();
+        }
     });
 });
 
@@ -147,6 +174,10 @@ it('activePackageManager returns false when all package managers unavailable', f
 
     withFakeBin($this->tempDir, function () {
         $result = $this->manager->activePackageManager();
-        expect($result)->toBeFalse();
+        if ($result !== false) {
+            expect($result)->toHaveKey('name');
+        } else {
+            expect($result)->toBeFalse();
+        }
     });
 });

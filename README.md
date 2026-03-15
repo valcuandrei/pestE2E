@@ -27,7 +27,7 @@ It orchestrates your existing JS test suite from Laravel.
 
 * JS test filtering via `only()` and `runTest()`
 * Laravel authentication using one-time auth tickets
-* Runner agnostic (Playwright by default, others via `command()`)
+* Runner agnostic (Playwright by default, extensible via worker contracts)
 * Managed testing server (no manual `php artisan serve`)
 * Isolated testing environment
 * Stable JSON reporting contract (`pest-e2e.v1`)
@@ -136,9 +136,9 @@ Configure a target inside the setUp() method of tests/E2ETestCase.php:
 
 ```php
 e2e()->target('frontend', fn ($p) => $p
-    ->dir('frontend')
-    ->command('node resources/js/pest-e2e/playwright/run.mjs')
-    ->report('json', 'storage/framework/testing/pest-e2e/{runId}/report.json')
+    ->dir('resources/js/e2e')
+    ->env(['APP_URL' => 'http://localhost'])
+    ->params(['baseUrl' => 'http://localhost'])
 );
 ```
 >Targets should be registered once in your base E2E test case, not inside individual tests.

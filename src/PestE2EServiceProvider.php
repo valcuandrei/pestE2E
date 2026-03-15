@@ -7,23 +7,22 @@ namespace ValcuAndrei\PestE2E;
 use Illuminate\Support\ServiceProvider;
 use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
 use ValcuAndrei\PestE2E\Commands\InstallCommand;
-use ValcuAndrei\PestE2E\Commands\PruneReportsCommand;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
+use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
+use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
-use ValcuAndrei\PestE2E\Registries\TargetRegistry;
-use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
-use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
-use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
+use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Support\CacheAuthTicketStore;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Support\LaravelAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
+use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
 
 final class PestE2EServiceProvider extends ServiceProvider
 {
@@ -74,7 +73,6 @@ final class PestE2EServiceProvider extends ServiceProvider
 
             $this->commands([
                 InstallCommand::class,
-                PruneReportsCommand::class,
             ]);
         }
 

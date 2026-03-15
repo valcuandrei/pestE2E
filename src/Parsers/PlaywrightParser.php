@@ -18,9 +18,6 @@ use ValcuAndrei\PestE2E\Exceptions\JsonReportParserException;
  */
 final class PlaywrightParser implements JsonParserContract
 {
-    /**
-     * @param  array<string, mixed>  $report
-     */
     public function parse(string $json, string $target, string $runId): JsonReportDTO
     {
         try {
@@ -34,6 +31,7 @@ final class PlaywrightParser implements JsonParserContract
             throw new JsonReportParserException('Invalid Playwright report: expected object root');
         }
 
+        /** @var array<string, mixed> $data */
         /** @var array{passed:int,failed:int,skipped:int,durationMs:int} $stats */
         $stats = [
             'passed' => 0,
@@ -54,7 +52,7 @@ final class PlaywrightParser implements JsonParserContract
         );
 
         return new JsonReportDTO(
-            schema: JsonReportParser::SCHEMA_V1,
+            schema: JsonReportDTO::SCHEMA_V1,
             target: $target,
             runId: $runId,
             stats: $this->parseStats($stats),
@@ -76,7 +74,7 @@ final class PlaywrightParser implements JsonParserContract
     }
 
     /**
-     * @param  array<int, mixed>  $suites
+     * @param  array<int|string, mixed>  $suites
      * @param  list<JsonReportTestDTO>  $tests
      * @param  array{passed:int,failed:int,skipped:int,durationMs:int}  $stats
      */
@@ -92,8 +90,10 @@ final class PlaywrightParser implements JsonParserContract
             if (isset($suite['suites']) && is_array($suite['suites'])) {
                 $this->extractTests($suite['suites'], $tests, $stats, $hasMultipleProjects, $file);
             }
-
-            if (! isset($suite['specs']) || ! is_array($suite['specs'])) {
+            if (! isset($suite['specs'])) {
+                continue;
+            }
+            if (! is_array($suite['specs'])) {
                 continue;
             }
 
@@ -108,7 +108,7 @@ final class PlaywrightParser implements JsonParserContract
     }
 
     /**
-     * @param  array<string, mixed>  $spec
+     * @param  array<string|int, mixed>  $spec
      * @param  list<JsonReportTestDTO>  $tests
      * @param  array{passed:int,failed:int,skipped:int,durationMs:int}  $stats
      */
@@ -119,10 +119,15 @@ final class PlaywrightParser implements JsonParserContract
         }
 
         foreach ($spec['tests'] as $test) {
-            if (! is_array($test) || ! isset($test['results']) || ! is_array($test['results'])) {
+            if (! is_array($test)) {
                 continue;
             }
-
+            if (! isset($test['results'])) {
+                continue;
+            }
+            if (! is_array($test['results'])) {
+                continue;
+            }
             foreach ($test['results'] as $result) {
                 if (! is_array($result)) {
                     continue;
@@ -137,9 +142,9 @@ final class PlaywrightParser implements JsonParserContract
     }
 
     /**
-     * @param  array<string, mixed>  $spec
-     * @param  array<string, mixed>  $test
-     * @param  array<string, mixed>  $result
+     * @param  array<string|int, mixed>  $spec
+     * @param  array<string|int, mixed>  $test
+     * @param  array<string|int, mixed>  $result
      */
     private function transformTest(array $spec, array $test, array $result, bool $hasMultipleProjects, ?string $file): JsonReportTestDTO
     {
@@ -184,7 +189,7 @@ final class PlaywrightParser implements JsonParserContract
     }
 
     /**
-     * @param  array<string, mixed>  $result
+     * @param  array<string|int, mixed>  $result
      */
     private function resolveDurationMs(array $result): int
     {
@@ -214,7 +219,7 @@ final class PlaywrightParser implements JsonParserContract
     }
 
     /**
-     * @param  array<string, mixed>  $result
+     * @param  array<string|int, mixed>  $result
      */
     private function extractError(TestStatusType $status, array $result): ?JsonReportErrorDTO
     {
@@ -239,11 +244,11 @@ final class PlaywrightParser implements JsonParserContract
             }
         }
 
-        return new JsonReportErrorDTO(message: trim($message), stack: null);
+        return new JsonReportErrorDTO(message: trim($message));
     }
 
     /**
-     * @param  array<string, mixed>  $result
+     * @param  array<string|int, mixed>  $result
      * @return list<string>|null
      */
     private function extractExtraLines(array $result): ?array

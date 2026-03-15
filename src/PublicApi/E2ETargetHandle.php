@@ -4,24 +4,17 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\PublicApi;
 
-use JsonException;
 use Pest\TestSuite;
 use RuntimeException;
-use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
-use ValcuAndrei\PestE2E\DTO\ParamsDTO;
-use ValcuAndrei\PestE2E\DTO\ProcessCommandDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
-use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
-use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\E2E as CompositionRoot;
 use ValcuAndrei\PestE2E\Enums\AuthModeType;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
-use ValcuAndrei\PestE2E\Runners\ProcessRunner;
 use ValcuAndrei\PestE2E\Runners\ServerRunner;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
@@ -46,8 +39,6 @@ final class E2ETargetHandle
     public function __construct(
         private readonly string $target,
         private readonly CompositionRoot $root,
-        private readonly ParamsFileWriterContract $paramsFileWriter,
-        private readonly ProcessRunner $processRunner,
         private readonly E2EOutputFormatter $outputFormatter,
         private readonly E2EOutputStore $outputStore,
         private readonly CurrentPhpunitTestContext $testContext,
@@ -220,8 +211,7 @@ final class E2ETargetHandle
         try {
             $serverType = ServerRunnerType::tryFrom(config()->string('pest-e2e.server.driver', ServerRunnerType::ARTISAN->value)) ?? ServerRunnerType::ARTISAN;
 
-            $serverRunner = new ServerRunner($serverType);
-            [$report, $ok, $thrown] = $serverRunner->run(
+            [$report, $ok, $thrown] = ServerRunner::instance($serverType)->whenReady(
                 /** @return array{0: JsonReportDTO, 1: bool, 2: ?\RuntimeException} */
                 callback: function (string $baseUrl) use ($runId): array {
                     $report = $this->root->runner()->run(
@@ -237,8 +227,7 @@ final class E2ETargetHandle
                     $thrown = $ok ? null : $this->reportFailureException($report, $runId);
 
                     return [$report, $ok, $thrown];
-                },
-                keepAliveOnFailure: CliOptions::$debug,
+                }
             );
         } catch (\Throwable $e) {
             $ok = false;
@@ -330,229 +319,6 @@ final class E2ETargetHandle
     public function runTest(string $testName): void
     {
         $this->only($testName)->run();
-    }
-
-    /**
-     * call(file, export?, params?) — run standalone JS export
-     * Shorthand: call("js/tasks/seed.ts:seedDatabase", [...])
-     *
-     * Stub for now (public surface reserved).
-     *
-     * @param  array<string,mixed>  $params
-     */
-    public function call(string $target, ?string $export = null, array $params = []): void
-    {
-        $targetConfig = $this->root->registry()->get($this->target);
-        $runId = $this->root->generateRunId();
-        $startedAt = microtime(true);
-        $parentTestName = $this->currentTestName();
-        $resolvedTarget = $target;
-
-        /** @var array<string, mixed> */
-        $mergedParams = array_replace_recursive($this->params, $params);
-        $context = RunContextDTO::make($targetConfig, $runId, $this->env, $mergedParams);
-
-        [$file, $export] = $this->resolveCallTarget($target, $export);
-
-        $paramsDto = new ParamsDTO(
-            target: $context->target->name,
-            runId: $context->runId,
-            params: $context->params,
-        );
-
-        $paramsJson = $this->encodeJson($paramsDto);
-
-        $paramsFilePath = $this->paramsFileWriter->write(
-            target: $context->target->name,
-            runId: $context->runId,
-            json: $paramsJson,
-        );
-
-        try {
-            $harness = $this->callHarnessPath();
-            $resolvedTarget = $export !== null ? "{$file}:{$export}" : $file;
-
-            $commandParts = [
-                'node',
-                escapeshellarg($harness),
-                escapeshellarg($file),
-            ];
-
-            if ($export !== null) {
-                $commandParts[] = escapeshellarg($export);
-            }
-
-            $command = implode(' ', $commandParts);
-
-            $commandDto = (new ProcessCommandDTO(
-                command: $command,
-                workingDirectory: $context->target->dir,
-                env: $context->env,
-            ))->withInjectedEnv([
-                'PEST_E2E_TARGET' => $context->target->name,
-                'PEST_E2E_RUN_ID' => $context->runId,
-                'PEST_E2E_PARAMS' => $paramsJson,
-                'PEST_E2E_PARAMS_FILE' => $paramsFilePath,
-            ]);
-
-            $plan = new ProcessPlanDTO(
-                command: $commandDto,
-                options: $this->options ?? new ProcessOptionsDTO,
-                params: $paramsDto,
-                paramsJsonInline: $paramsJson,
-                paramsJsonFilePath: $paramsFilePath,
-            );
-
-            $result = $this->processRunner->run($plan);
-
-            if (! $result->isSuccessful()) {
-                throw new RuntimeException(
-                    "E2E call failed (exit {$result->exitCode}).\n\n".
-                        "TARGET:\n{$resolvedTarget}\n\n".
-                        "CMD:\n{$command}\n\n".
-                        "CWD:\n{$context->target->dir}\n\n".
-                        "STDOUT:\n{$result->stdout}\n\n".
-                        "STDERR:\n{$result->stderr}"
-                );
-            }
-
-            $durationSeconds = microtime(true) - $startedAt;
-            $lines = $this->buildCallLines(
-                target: $this->target,
-                resolvedTarget: $resolvedTarget,
-                runId: $runId,
-                ok: true,
-                durationSeconds: $durationSeconds,
-                parentTestName: $parentTestName,
-                extraLines: [],
-            );
-
-            // Store for inline output (keyed by PHPUnit test ID)
-            $currentTestId = $this->testContext->get();
-
-            if ($currentTestId !== null) {
-                $entry = new E2EOutputEntryDTO(
-                    type: 'call',
-                    target: $this->target,
-                    runId: $runId,
-                    ok: true,
-                    durationSeconds: $durationSeconds,
-                    stats: null,
-                    lines: $lines,
-                );
-
-                $this->outputStore->putForTest($currentTestId, $entry);
-            } else {
-                // Fallback to old behavior
-                $this->outputStore->add(
-                    lines: $lines,
-                    type: 'call',
-                    target: $this->target,
-                    runId: $runId,
-                    ok: true,
-                    durationSeconds: $durationSeconds,
-                    stats: null,
-                );
-            }
-        } catch (RuntimeException $exception) {
-            $durationSeconds = microtime(true) - $startedAt;
-            $lines = $this->buildCallLines(
-                target: $this->target,
-                resolvedTarget: $resolvedTarget,
-                runId: $runId,
-                ok: false,
-                durationSeconds: $durationSeconds,
-                parentTestName: $parentTestName,
-                extraLines: $this->exceptionLines($exception),
-            );
-
-            // Store for inline output (keyed by PHPUnit test ID)
-            $currentTestId = $this->testContext->get();
-
-            if ($currentTestId !== null) {
-                $entry = new E2EOutputEntryDTO(
-                    type: 'call',
-                    target: $this->target,
-                    runId: $runId,
-                    ok: false,
-                    durationSeconds: $durationSeconds,
-                    stats: null,
-                    lines: $lines,
-                );
-
-                $this->outputStore->putForTest($currentTestId, $entry);
-            } else {
-                // Fallback to old behavior
-                $this->outputStore->add(
-                    lines: $lines,
-                    type: 'call',
-                    target: $this->target,
-                    runId: $runId,
-                    ok: false,
-                    durationSeconds: $durationSeconds,
-                    stats: null,
-                );
-            }
-
-            throw $exception;
-        } finally {
-            @unlink($paramsFilePath);
-        }
-    }
-
-    /**
-     * Resolve the call target and export name.
-     *
-     * @return array{0:string,1:?string}
-     */
-    private function resolveCallTarget(string $target, ?string $export): array
-    {
-        if ($export !== null) {
-            return [$target, $export];
-        }
-
-        $pos = strrpos($target, ':');
-
-        if ($pos === false) {
-            return [$target, null];
-        }
-
-        $file = substr($target, 0, $pos);
-        $candidate = substr($target, $pos + 1);
-
-        if ($file === '' || $candidate === '') {
-            return [$target, null];
-        }
-
-        if (str_contains($candidate, '/') || str_contains($candidate, '\\')) {
-            return [$target, null];
-        }
-
-        return [$file, $candidate];
-    }
-
-    /**
-     * Get the call harness path.
-     */
-    private function callHarnessPath(): string
-    {
-        $path = dirname(__DIR__, 2).'/resources/node/call.mjs';
-
-        if (! is_file($path)) {
-            throw new RuntimeException("E2E call harness not found at {$path}");
-        }
-
-        return $path;
-    }
-
-    /**
-     * Encode the params to JSON.
-     *
-     * @throws JsonException
-     */
-    private function encodeJson(ParamsDTO $paramsDto): string
-    {
-        return json_encode($paramsDto->toArray(), JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -661,51 +427,6 @@ final class E2ETargetHandle
             parentTestName: $parentTestName,
             extraLines: $extraLines,
         );
-    }
-
-    /**
-     * Build the call lines.
-     *
-     * @param  array<int, string>  $extraLines
-     * @return array<int, string>
-     */
-    private function buildCallLines(
-        string $target,
-        string $resolvedTarget,
-        string $runId,
-        bool $ok,
-        ?float $durationSeconds,
-        ?string $parentTestName,
-        array $extraLines,
-    ): array {
-        return $this->outputFormatter->buildCallLines(
-            target: $target,
-            resolvedTarget: $resolvedTarget,
-            runId: $runId,
-            ok: $ok,
-            durationSeconds: $durationSeconds,
-            parentTestName: $parentTestName,
-            extraLines: $extraLines,
-        );
-    }
-
-    /**
-     * Build the exception lines.
-     *
-     * @return array<int, string>
-     */
-    private function exceptionLines(RuntimeException $exception): array
-    {
-        $message = trim($exception->getMessage());
-
-        if ($message === '') {
-            return [];
-        }
-
-        return array_values(array_filter(
-            explode("\n", $message),
-            static fn (string $line): bool => $line !== '',
-        ));
     }
 
     private function reportFailureException(JsonReportDTO $report, string $runId): RuntimeException

@@ -10,12 +10,10 @@ namespace ValcuAndrei\PestE2E\DTO;
 final readonly class ProcessCommandDTO
 {
     /**
-     * @param  string  $command  Raw command string (executed as-is).
      * @param  array<string, string|null>  $env
      * @param  array<string, string|null>  $injectedEnv  (optional) additional env to apply last
      */
     public function __construct(
-        public string $command,
         public string $workingDirectory,
         public array $env = [],
         public array $injectedEnv = [],
@@ -29,7 +27,6 @@ final readonly class ProcessCommandDTO
     public function withEnv(array $env): self
     {
         return new self(
-            command: $this->command,
             workingDirectory: $this->workingDirectory,
             env: array_replace($this->env, $env),
             injectedEnv: $this->injectedEnv,
@@ -44,7 +41,6 @@ final readonly class ProcessCommandDTO
     public function withInjectedEnv(array $env): self
     {
         return new self(
-            command: $this->command,
             workingDirectory: $this->workingDirectory,
             env: $this->env,
             injectedEnv: array_replace($this->injectedEnv, $env),

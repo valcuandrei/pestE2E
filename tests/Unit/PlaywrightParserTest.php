@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
+use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\Enums\TestStatusType;
 use ValcuAndrei\PestE2E\Exceptions\JsonReportParserException;
-use ValcuAndrei\PestE2E\Parsers\JsonReportParser;
 use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
 
 it('converts a playwright report to canonical json report dto', function () {
@@ -79,7 +79,7 @@ it('converts a playwright report to canonical json report dto', function () {
         ],
     ], JSON_THROW_ON_ERROR), 'frontend', 'run-abc');
 
-    expect($report->schema)->toBe(JsonReportParser::SCHEMA_V1)
+    expect($report->schema)->toBe(JsonReportDTO::SCHEMA_V1)
         ->and($report->target)->toBe('frontend')
         ->and($report->runId)->toBe('run-abc')
         ->and($report->stats->passed)->toBe(1)

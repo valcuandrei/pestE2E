@@ -7,37 +7,16 @@ Injected into every Node process:
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON)
 - `PEST_E2E_PARAMS_FILE` (absolute path)
-- `PEST_E2E_TEST_FILTER`
-- `PEST_E2E_BROWSE`
-- `PEST_E2E_DEBUG`
 
 ## Suite execution contract
 
-- JS suite must emit a **JSON report**
-- The report must conform to the `pest-e2e.v1` schema
-- File path must match target config
+The PHP `PlaywrightWorker` drives Playwright directly via its CLI.
+Test filtering (`--grep`), headed mode (`--headed`), and debug mode (`--debug`) are passed as CLI arguments.
 
 ### Playwright integration
 
-When using the provided Playwright runner wrapper (`resources/js/pest-e2e/playwright/run.mjs`):
-- Playwright produces its native JSON report format
-- the wrapper converts it to canonical `pest-e2e.v1`
-- canonical report is written to the configured report path
-- raw Playwright report is preserved at:
-  - `{reportsDir}/{runId}/playwright-report.json`
-
-`{reportsDir}` defaults to `storage/framework/testing/pest-e2e`.
-
-## call() contract
-- Node harness loads module + export
-- Context passed:
-  - params
-  - env
-  - runId
-  - target
-- resolve → exit code 0
-- throw/reject → non-zero exit
-- stdout/stderr captured and surfaced
+The PHP `PlaywrightWorker` drives Playwright directly via its CLI and reads the JSON report output.
+Report conversion from Playwright's native format to `pest-e2e.v1` is handled by `PlaywrightParser` on the PHP side.
 
 ## Auth bridge contract
 - JS receives `params.auth` payload
