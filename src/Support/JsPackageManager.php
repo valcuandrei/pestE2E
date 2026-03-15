@@ -188,6 +188,31 @@ class JsPackageManager
     }
 
     /**
+     * Get the path to a local binary in node_modules/.bin, or null if not found.
+     *
+     * @param  string  $binary  The binary name (e.g. 'playwright', 'vite').
+     * @param  string|null  $workDir  Directory to check; defaults to base_path().
+     */
+    public function getLocalBinPath(string $binary, ?string $workDir = null): ?string
+    {
+        $root = $workDir ?? base_path();
+        $path = rtrim($root, '/').'/node_modules/.bin/'.$binary;
+
+        return is_file($path) ? $path : null;
+    }
+
+    /**
+     * Check if a local binary exists in node_modules/.bin.
+     *
+     * @param  string  $binary  The binary name (e.g. 'playwright', 'vite').
+     * @param  string|null  $workDir  Directory to check; defaults to base_path().
+     */
+    public function hasLocalBin(string $binary, ?string $workDir = null): bool
+    {
+        return $this->getLocalBinPath($binary, $workDir) !== null;
+    }
+
+    /**
      * Check if a package is installed.
      *
      * @param  string  $package  The package to check.
@@ -307,10 +332,20 @@ class JsPackageManager
      * @param  bool  $tty  Whether to use a TTY.
      * @param  bool  $dlx  Whether to use dlx.
      * @param  callable(string $type, string $buffer): void|null  $outputCallback  The output callback to use.
+     * @param  string|null  $workDir  Working directory; defaults to base_path().
+     * @param  int|null  $timeout  Timeout in seconds; null means no timeout.
+     * @param  array<string, string|null>|null  $env  Environment variables; null means inherit.
      * @return Process|false The process.
      */
-    public function runCommand(array $command, bool $tty = false, bool $dlx = false, ?callable $outputCallback = null): Process|false
-    {
+    public function runCommand(
+        array $command,
+        bool $tty = false,
+        bool $dlx = false,
+        ?callable $outputCallback = null,
+        ?string $workDir = null,
+        ?int $timeout = null,
+        ?array $env = null,
+    ): Process|false {
         $pm = $this->activePackageManager();
 
         if (! $pm) {
@@ -324,9 +359,10 @@ class JsPackageManager
 
         $prefix = $dlx && isset($pm['dlx']) ? $pm['dlx'] : [($pm['name'] ?? '')];
         $prefix = $this->ensureStringArray($prefix);
-        $process = new Process([...$prefix, ...$command], base_path());
+        $cwd = $workDir ?? base_path();
+        $process = new Process([...$prefix, ...$command], $cwd, $env);
         $process->setTty($tty);
-        $process->setTimeout(null);
+        $process->setTimeout($timeout);
 
         if ($outputCallback) {
             $process->run($outputCallback);
@@ -343,10 +379,27 @@ class JsPackageManager
      * @param  array<string>  $command  The command to run.
      * @param  bool  $tty  Whether to use a TTY.
      * @param  callable(string $type, string $buffer): void|null  $outputCallback  The output callback to use.
+     * @param  string|null  $workDir  Working directory; defaults to base_path().
+     * @param  int|null  $timeout  Timeout in seconds; null means no timeout.
+     * @param  array<string, string|null>|null  $env  Environment variables; null means inherit.
      */
-    public function runDlx(array $command, bool $tty = false, ?callable $outputCallback = null): Process|false
-    {
-        return $this->runCommand(command: $command, tty: $tty, dlx: true, outputCallback: $outputCallback);
+    public function runDlx(
+        array $command,
+        bool $tty = false,
+        ?callable $outputCallback = null,
+        ?string $workDir = null,
+        ?int $timeout = null,
+        ?array $env = null,
+    ): Process|false {
+        return $this->runCommand(
+            command: $command,
+            tty: $tty,
+            dlx: true,
+            outputCallback: $outputCallback,
+            workDir: $workDir,
+            timeout: $timeout,
+            env: $env,
+        );
     }
 
     /**

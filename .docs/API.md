@@ -10,18 +10,11 @@ Anything here is stable once implemented.
 
 ```php
 e2e()->target('frontend', fn ($p) => $p
-    ->dir('js')
-    ->runner('playwright') // informational only
-    ->command('node resources/js/pest-e2e/playwright/run.mjs') // executed in the same environment as Pest
-    ->report('json', '{reportsDir}/{runId}/report.json')
+    ->dir('resources/js/e2e')
     ->env(['APP_URL' => 'http://localhost'])
     ->params(['baseUrl' => 'http://localhost'])
 );
 ```
-
-### Important
-- `command()` MUST NOT include `sail`, `docker`, or similar wrappers
-- the command runs wherever Pest is executed
 
 ## Runtime overrides
 - `withEnv(array $env)`
@@ -31,8 +24,6 @@ e2e()->target('frontend', fn ($p) => $p
 - `run()` — run suite, fail on JS failures
 - `only(string $pattern)` — run a subset when the runner supports filtering (runner-specific)
 - `runTest(string $name)` — convenience alias for single-test execution
-- `call(string $file, ?string $export = null, array $params = [])` — run a standalone JS export
-
 ### Filtering (runner-specific)
 
 ```php
@@ -71,13 +62,7 @@ The JS runner should POST the ticket to the configured auth route:
 - default: `/pest-e2e/auth/login`
 - configurable: `config('pest-e2e.auth.route')`
 
-## Report paths
+## Report handling
 
-Default reports directory:
-- `storage/framework/testing/pest-e2e` (config: `pest-e2e.reports.dir`)
-
-Use `{reportsDir}` in target report paths:
-
-```php
-->report('json', '{reportsDir}/{runId}/report.json')
-```
+Reports are handled internally by `PlaywrightParser` on the PHP side.
+The JSON report path is managed automatically by `PlaywrightWorker`.

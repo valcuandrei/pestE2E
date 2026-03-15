@@ -102,9 +102,8 @@ When spawning Node, the package injects:
 - `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON) OR `PEST_E2E_PARAMS_FILE`
-- `PEST_E2E_TEST_FILTER`
-- `PEST_E2E_BROWSE`
-- `PEST_E2E_DEBUG`
+
+Test filtering, headed mode, and debug mode are passed as CLI arguments to Playwright directly.
 
 ---
 

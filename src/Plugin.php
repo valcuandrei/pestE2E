@@ -9,6 +9,8 @@ use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\HandlesArguments;
 use Pest\Contracts\Plugins\Terminable;
 use Symfony\Component\Console\Output\OutputInterface;
+use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
+use ValcuAndrei\PestE2E\Runners\ServerRunner;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
@@ -144,6 +146,7 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
     public function terminate(): void
     {
         $this->store()->flush();
+        $this->serverRunner()->stop();
     }
 
     /**
@@ -164,5 +167,10 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
         }
 
         return [$parent, array_slice($lines, 1)];
+    }
+
+    private function serverRunner(): ServerRunner
+    {
+        return ServerRunner::instance(ServerRunnerType::ARTISAN);
     }
 }

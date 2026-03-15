@@ -7,7 +7,6 @@ namespace ValcuAndrei\PestE2E\Runners;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
-use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
  * @internal
@@ -15,11 +14,11 @@ use ValcuAndrei\PestE2E\Support\TimingProbe;
 final class ServerRunner
 {
     /**
-     * Shared server runners keyed by driver.
+     * Server runner instances keyed by driver.
      *
      * @var array<string, self>
      */
-    private static array $sharedRunners = [];
+    private static array $instances = [];
 
     private ?Process $process = null;
 
@@ -27,34 +26,28 @@ final class ServerRunner
 
     private int $port = 0;
 
-    public function __construct(
+    private function __construct(
         private readonly ServerRunnerType $type = ServerRunnerType::ARTISAN,
     ) {}
 
     /**
-     * Get an existing shared server runner or create a new one.
+     * Get the instance of the server runner.
      */
-    public static function getOrCreate(ServerRunnerType $type = ServerRunnerType::ARTISAN): self
+    public static function instance(ServerRunnerType $type = ServerRunnerType::ARTISAN): self
     {
-        $key = $type->value;
-
-        if (! isset(self::$sharedRunners[$key])) {
-            self::$sharedRunners[$key] = new self($type);
-        }
-
-        return self::$sharedRunners[$key];
+        return self::$instances[$type->value] ??= new self($type);
     }
 
     /**
-     * Stop and clear all shared server runners.
+     * Stop and clear all server runner instances.
      */
     public static function stopAll(): void
     {
-        foreach (self::$sharedRunners as $runner) {
+        foreach (self::$instances as $runner) {
             $runner->stop();
         }
 
-        self::$sharedRunners = [];
+        self::$instances = [];
     }
 
     /**
@@ -67,26 +60,25 @@ final class ServerRunner
      * @param  callable(string): T  $callback
      * @return T
      */
-    public function run(callable $callback, bool $keepAliveOnFailure = false)
+    public function whenReady(callable $callback)
     {
-        if (! $this->canServeLaravelApp()) {
-            // Non-servable environment (Testbench/package context).
-            // Use whatever app URL is already configured.
-            $baseUrl = rtrim(config()->string('app.url', 'http://127.0.0.1'), '/');
+        if (! $this->isRunning()) {
+            if ($this->canServeLaravelApp() && ! empty($_ENV['IS_E2E_TEST'])) {
+                $this->start();
+            } else {
+                $baseUrl = rtrim(config()->string('app.url', 'http://127.0.0.1'), '/');
 
-            return $callback($baseUrl);
-        }
-
-        $this->start();
-        $this->registerShutdownHandler();
-
-        try {
-            return $callback($this->baseUrl());
-        } finally {
-            if (! $keepAliveOnFailure && ! $this->isSharedRunner()) {
-                $this->stop();
+                return $callback($baseUrl);
             }
         }
+
+        $this->waitUntilReady(
+            baseUrl: $this->baseUrl(),
+            timeoutSeconds: 12,
+            probePath: $this->probePath(),
+        );
+
+        return $callback($this->baseUrl());
     }
 
     /**
@@ -98,23 +90,20 @@ final class ServerRunner
             return;
         }
 
-        $startedAt = microtime(true);
-        TimingProbe::mark('server_runner_start', [
-            'driver' => $this->type->value,
-        ]);
-
         $this->port = $this->findFreePort($this->host);
+
+        $basePath = $this->basePath();
 
         $env = array_merge($_ENV, [
             'APP_ENV' => 'testing',
             'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
             'APP_URL' => $this->baseUrl(),
-            'PEST_E2E_BASE_PATH' => base_path(),
+            'PEST_E2E_BASE_PATH' => $basePath,
         ]);
 
         $this->process = new Process(
             $this->command(),
-            base_path(),
+            $basePath,
             $env,
             null,
             null
@@ -122,18 +111,7 @@ final class ServerRunner
 
         $this->process->setTimeout(null);
         $this->process->start();
-
-        $this->waitUntilReady(
-            baseUrl: $this->baseUrl(),
-            timeoutSeconds: 12,
-            probePath: config()->string('pest-e2e.auth.route', '/__pest_e2e_ping'),
-        );
-
-        TimingProbe::mark('server_ready', [
-            'baseUrl' => $this->baseUrl(),
-            'port' => $this->port,
-            'durationMs' => TimingProbe::elapsedMs($startedAt),
-        ]);
+        $this->registerShutdownHandler();
     }
 
     /**
@@ -187,6 +165,9 @@ final class ServerRunner
         };
     }
 
+    /**
+     * The base URL of the server.
+     */
     public function baseUrl(): string
     {
         return $this->port > 0
@@ -194,16 +175,33 @@ final class ServerRunner
             : "http://{$this->host}";
     }
 
+    /**
+     * Check if the server is running.
+     */
+    public function isRunning(): bool
+    {
+        return $this->process instanceof Process && $this->process->isRunning();
+    }
+
+    /**
+     * Get the port of the server.
+     */
     public function port(): int
     {
         return $this->port;
     }
 
+    /**
+     * Get the process of the server.
+     */
     public function process(): ?Process
     {
         return $this->process;
     }
 
+    /**
+     * Wait until the server is ready.
+     */
     private function waitUntilReady(string $baseUrl, int $timeoutSeconds, string $probePath): void
     {
         $deadline = microtime(true) + $timeoutSeconds;
@@ -224,7 +222,7 @@ final class ServerRunner
                 return;
             }
 
-            usleep(100_000);
+            usleep(10_000);
         }
 
         $process = $this->requireProcess();
@@ -236,6 +234,9 @@ final class ServerRunner
         );
     }
 
+    /**
+     * Check if the server responds to HTTP.
+     */
     private function httpResponds(string $url): bool
     {
         $context = stream_context_create([
@@ -257,6 +258,9 @@ final class ServerRunner
         return true;
     }
 
+    /**
+     * Find a free port.
+     */
     private function findFreePort(string $host): int
     {
         $socket = @stream_socket_server("tcp://{$host}:0", $errno, $errstr);
@@ -279,6 +283,9 @@ final class ServerRunner
         return (int) substr($name, $pos + 1);
     }
 
+    /**
+     * Require the process of the server.
+     */
     private function requireProcess(): Process
     {
         if (! ($this->process instanceof Process)) {
@@ -288,6 +295,9 @@ final class ServerRunner
         return $this->process;
     }
 
+    /**
+     * Register a shutdown handler.
+     */
     private function registerShutdownHandler(): void
     {
         static $registered = false;
@@ -308,17 +318,76 @@ final class ServerRunner
     }
 
     /**
-     * Check whether this runner is registered as shared.
+     * Check if the server can serve a Laravel app.
      */
-    private function isSharedRunner(): bool
-    {
-        return in_array($this, self::$sharedRunners, true);
-    }
-
     private function canServeLaravelApp(): bool
     {
-        return is_file(base_path('artisan'))
-            && is_file(base_path('public/index.php'))
-            && is_file(base_path('vendor/autoload.php'));
+        $basePath = $this->resolveBasePath();
+
+        if ($basePath === null) {
+            return false;
+        }
+
+        return is_file($basePath.'/artisan')
+            && is_file($basePath.'/public/index.php')
+            && is_file($basePath.'/vendor/autoload.php');
+    }
+
+    /**
+     * Get the base path of the server.
+     */
+    private function basePath(): string
+    {
+        $basePath = $this->resolveBasePath();
+
+        if ($basePath === null) {
+            throw new RuntimeException('Unable to locate Laravel project base path.');
+        }
+
+        return $basePath;
+    }
+
+    /**
+     * Get the probe path of the server.
+     */
+    private function probePath(): string
+    {
+        $path = $_ENV['PEST_E2E_AUTH_ROUTE']
+            ?? $_SERVER['PEST_E2E_AUTH_ROUTE']
+            ?? getenv('PEST_E2E_AUTH_ROUTE');
+
+        if (is_string($path) && $path !== '' && str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        return '/pest-e2e/auth/login';
+    }
+
+    /**
+     * Resolve the base path of the server.
+     */
+    private function resolveBasePath(): ?string
+    {
+        $cwd = $_SERVER['PWD'] ?? getcwd();
+
+        if (! is_string($cwd) || $cwd === '') {
+            return null;
+        }
+
+        $dir = realpath($cwd) ?: $cwd;
+
+        while ($dir !== dirname($dir)) {
+            if (
+                is_file($dir.'/artisan')
+                && is_file($dir.'/public/index.php')
+                && is_file($dir.'/vendor/autoload.php')
+            ) {
+                return $dir;
+            }
+
+            $dir = dirname($dir);
+        }
+
+        return null;
     }
 }

@@ -12,6 +12,10 @@ final readonly class ProcessPlanDTO
     public function __construct(
         public ProcessCommandDTO $command,
         public ProcessOptionsDTO $options,
+        public ?string $testFilter = null,
+        public bool $headed = false,
+        public bool $debug = false,
+        public string $commandPreview = 'playwright test --reporter json',
         public ?ParamsDTO $params = null,
         public ?string $paramsJsonInline = null,
         public ?string $paramsJsonFilePath = null,
@@ -25,9 +29,13 @@ final readonly class ProcessPlanDTO
         return new self(
             command: $this->command,
             options: $this->options,
+            testFilter: $this->testFilter,
+            headed: $this->headed,
+            debug: $this->debug,
+            commandPreview: $this->commandPreview,
             params: $params,
-            paramsJsonInline: $params instanceof \ValcuAndrei\PestE2E\DTO\ParamsDTO ? $this->paramsJsonInline : null,
-            paramsJsonFilePath: $params instanceof \ValcuAndrei\PestE2E\DTO\ParamsDTO ? $this->paramsJsonFilePath : null,
+            paramsJsonInline: $params instanceof ParamsDTO ? $this->paramsJsonInline : null,
+            paramsJsonFilePath: $params instanceof ParamsDTO ? $this->paramsJsonFilePath : null,
         );
     }
 
@@ -39,6 +47,10 @@ final readonly class ProcessPlanDTO
         return new self(
             command: $this->command,
             options: $this->options,
+            testFilter: $this->testFilter,
+            headed: $this->headed,
+            debug: $this->debug,
+            commandPreview: $this->commandPreview,
             params: $this->params,
             paramsJsonInline: $paramsJsonInline,
         );
@@ -52,6 +64,10 @@ final readonly class ProcessPlanDTO
         return new self(
             command: $this->command,
             options: $this->options,
+            testFilter: $this->testFilter,
+            headed: $this->headed,
+            debug: $this->debug,
+            commandPreview: $this->commandPreview,
             params: $this->params,
             paramsJsonInline: null,
             paramsJsonFilePath: $path,
@@ -63,7 +79,7 @@ final readonly class ProcessPlanDTO
      */
     public function hasParams(): bool
     {
-        return $this->params instanceof \ValcuAndrei\PestE2E\DTO\ParamsDTO;
+        return $this->params instanceof ParamsDTO;
     }
 
     /**

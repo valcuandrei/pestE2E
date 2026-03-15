@@ -84,60 +84,6 @@ final class E2EOutputFormatter
     }
 
     /**
-     * @param  array<int, string>  $extraLines
-     * @return array<int, string>
-     */
-    public function buildCallLines(
-        string $target,
-        string $resolvedTarget,
-        string $runId,
-        bool $ok,
-        ?float $durationSeconds,
-        ?string $parentTestName,
-        array $extraLines,
-    ): array {
-        $status = $ok
-            ? TestStatusType::PASSED->getSymbol().' PASSED'
-            : TestStatusType::FAILED->getSymbol().' FAILED';
-        $suffix = $durationSeconds !== null ? ' ('.$this->formatDurationSeconds($durationSeconds).')' : '';
-
-        $parentTestName = $this->normalizeParentTestName($parentTestName);
-
-        if ($parentTestName === null) {
-            $header = sprintf(
-                'PestE2E: target "%s" call "%s" runId "%s" %s%s',
-                $target,
-                $resolvedTarget,
-                $runId,
-                $status,
-                $suffix,
-            );
-
-            return array_merge([$header], $extraLines);
-        }
-
-        $header = sprintf(
-            'E2E › %s (call %s, runId %s) %s%s',
-            $target,
-            $resolvedTarget,
-            $runId,
-            $status,
-            $suffix,
-        );
-
-        $lines = [
-            $parentTestName,
-            $this->branchLine($header),
-        ];
-
-        if ($extraLines !== []) {
-            return array_merge($lines, $this->indentLines($extraLines, $this->childIndent()));
-        }
-
-        return $lines;
-    }
-
-    /**
      * @param  array<int, JsonReportTestDTO>  $tests
      * @return array<int, string>
      */

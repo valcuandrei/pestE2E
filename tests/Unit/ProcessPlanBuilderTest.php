@@ -3,22 +3,18 @@
 declare(strict_types=1);
 
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
+use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
-use ValcuAndrei\PestE2E\Tests\Fakes\FakeParamsFileWriter;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 
-it('injects target and run id even when there are no params', function () {
-    putenv('PEST_E2E_TIMING=0');
-    $_ENV['PEST_E2E_TIMING'] = '0';
-    $writer = new FakeParamsFileWriter;
+it('builds explicit execution flags even when there are no params', function () {
+    $writer = fakeParamsFileWriter();
     $builder = new ProcessPlanBuilder($writer);
 
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: 'reports/report.json',
         env: ['APP_URL' => 'http://localhost'],
         params: [],
         artifactsDir: null,
@@ -30,53 +26,22 @@ it('injects target and run id even when there are no params', function () {
 
     $env = $plan->command->getMergedEnv();
 
-    expect($env['PEST_E2E_TARGET'])->toBe('frontend')
-        ->and($env['PEST_E2E_RUN_ID'])->toBe('run-123')
-        ->and($env['PEST_E2E_TIMING'])->toBe('0')
+    expect($plan->testFilter)->toBeNull()
+        ->and($plan->headed)->toBeFalse()
+        ->and($plan->debug)->toBeFalse()
+        ->and($plan->commandPreview)->toBe('playwright test --reporter json')
         ->and(isset($env['PEST_E2E_PARAMS']))->toBeFalse()
         ->and(isset($env['PEST_E2E_PARAMS_FILE']))->toBeFalse()
         ->and($plan->hasParams())->toBeFalse();
-
-    putenv('PEST_E2E_TIMING');
-    unset($_ENV['PEST_E2E_TIMING']);
-});
-
-it('passes timing flag to js runner env', function () {
-    putenv('PEST_E2E_TIMING=1');
-    $_ENV['PEST_E2E_TIMING'] = '1';
-    $writer = new FakeParamsFileWriter;
-    $builder = new ProcessPlanBuilder($writer);
-
-    $target = new TargetConfigDTO(
-        name: 'frontend',
-        dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: 'reports/report.json',
-        env: [],
-        params: [],
-        artifactsDir: null,
-    );
-
-    $ctx = RunContextDTO::make($target, 'run-timing');
-    $plan = $builder->build($ctx);
-
-    expect($plan->command->getMergedEnv()['PEST_E2E_TIMING'])->toBe('1');
-
-    putenv('PEST_E2E_TIMING');
-    unset($_ENV['PEST_E2E_TIMING']);
 });
 
 it('uses inline params when JSON is small enough', function () {
-    $writer = new FakeParamsFileWriter;
+    $writer = fakeParamsFileWriter();
     $builder = (new ProcessPlanBuilder($writer))->withMaxInlineBytes(10_000);
 
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: 'reports/report.json',
         env: ['APP_URL' => 'http://localhost'],
         params: ['baseUrl' => 'http://localhost'],
         artifactsDir: null,
@@ -96,15 +61,12 @@ it('uses inline params when JSON is small enough', function () {
 });
 
 it('uses params file when JSON is too large', function () {
-    $writer = new FakeParamsFileWriter('/abs/path/params.json');
+    $writer = fakeParamsFileWriter('/abs/path/params.json');
     $builder = (new ProcessPlanBuilder($writer))->withMaxInlineBytes(10); // force file mode
 
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: 'reports/report.json',
         env: ['APP_URL' => 'http://localhost'],
         params: ['baseUrl' => 'http://localhost', 'auth' => ['ticket' => str_repeat('x', 100)]],
         artifactsDir: null,
@@ -124,3 +86,53 @@ it('uses params file when JSON is too large', function () {
         ->and($writer->lastRunId)->toBe('run-big')
         ->and($writer->lastJson)->toBeString();
 });
+
+it('promotes browse and debug into explicit execution flags', function () {
+    CliOptions::$browse = true;
+    CliOptions::$debug = true;
+
+    try {
+        $writer = fakeParamsFileWriter();
+        $builder = new ProcessPlanBuilder($writer);
+        $target = new TargetConfigDTO(name: 'frontend', dir: 'js');
+        $ctx = RunContextDTO::make($target, 'run-filtered', testFilter: 'profile');
+
+        $plan = $builder->build($ctx);
+
+        expect($plan->testFilter)->toBe('profile')
+            ->and($plan->headed)->toBeTrue()
+            ->and($plan->debug)->toBeTrue()
+            ->and($plan->options->timeoutSeconds)->toBe(3600)
+            ->and($plan->commandPreview)->toContain('--grep profile')
+            ->and($plan->commandPreview)->toContain('--headed')
+            ->and($plan->commandPreview)->toContain('--debug');
+    } finally {
+        CliOptions::$browse = false;
+        CliOptions::$debug = false;
+    }
+});
+
+function fakeParamsFileWriter(string $returnPath = '/tmp/pest-e2e/fake.json'): ParamsFileWriterContract
+{
+    return new class($returnPath) implements ParamsFileWriterContract
+    {
+        public ?string $lastTarget = null;
+
+        public ?string $lastRunId = null;
+
+        public ?string $lastJson = null;
+
+        public function __construct(
+            private readonly string $returnPath,
+        ) {}
+
+        public function write(string $target, string $runId, string $json): string
+        {
+            $this->lastTarget = $target;
+            $this->lastRunId = $runId;
+            $this->lastJson = $json;
+
+            return $this->returnPath;
+        }
+    };
+}

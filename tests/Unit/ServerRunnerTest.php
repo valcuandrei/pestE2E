@@ -13,11 +13,11 @@ afterEach(function () {
 });
 
 it('skips starting server when laravel app is not servable', function () {
-    $runner = new ServerRunner;
+    $runner = ServerRunner::instance();
 
     $called = false;
 
-    $result = $runner->run(function (string $baseUrl) use (&$called) {
+    $result = $runner->whenReady(function (string $baseUrl) use (&$called) {
         $called = true;
 
         expect($baseUrl)->toBeString();
@@ -29,28 +29,27 @@ it('skips starting server when laravel app is not servable', function () {
         ->and($result)->toBe('ok');
 });
 
-it('rethrows exception even when keepAliveOnFailure is true', function () {
-    $runner = new ServerRunner;
+it('rethrows exception from callback', function () {
+    $runner = ServerRunner::instance();
 
     expect(
-        fn () => $runner->run(
-            fn () => throw new \RuntimeException('boom'),
-            keepAliveOnFailure: true
+        fn () => $runner->whenReady(
+            fn () => throw new \RuntimeException('boom')
         )
     )->toThrow(\RuntimeException::class, 'boom');
 });
 
-it('returns the same shared runner instance for the same driver', function () {
-    $first = ServerRunner::getOrCreate();
-    $second = ServerRunner::getOrCreate();
+it('returns the same runner instance for the same driver', function () {
+    $first = ServerRunner::instance();
+    $second = ServerRunner::instance();
 
     expect($first)->toBe($second);
 });
 
-it('clears shared runners when stopAll is called', function () {
-    $first = ServerRunner::getOrCreate();
+it('clears runner instances when stopAll is called', function () {
+    $first = ServerRunner::instance();
     ServerRunner::stopAll();
-    $second = ServerRunner::getOrCreate();
+    $second = ServerRunner::instance();
 
     expect($second)->not->toBe($first);
 });

@@ -4,18 +4,14 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Runners;
 
-use Illuminate\Support\Facades\Log;
-use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
-use ValcuAndrei\PestE2E\Actions\ReportsPrunerAction;
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
-use ValcuAndrei\PestE2E\Contracts\JsRunnerContract;
+use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportErrorDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
-use ValcuAndrei\PestE2E\DTO\JsRunRequestDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Enums\TestStatusType;
@@ -33,7 +29,7 @@ final readonly class E2ERunner
     public function __construct(
         private TargetRegistry $registry,
         private ProcessPlanBuilder $planBuilder,
-        private JsRunnerContract $jsRunner,
+        private JsWorkerContract $jsWorker,
         private JsonReportReader $reportReader,
         private RunIdGeneratorContract $runIdGenerator,
     ) {}
@@ -58,26 +54,10 @@ final readonly class E2ERunner
         $runId ??= $this->runIdGenerator->generate();
         $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
         $plan = $this->planBuilder->build($context, $options);
-        $runnerCapabilities = $this->jsRunner->capabilities();
-
-        if (! $this->jsRunner->isRunning()) {
-            $this->jsRunner->start();
-        }
-
-        $runResult = $this->jsRunner->run(JsRunRequestDTO::fromProcessPlan($plan));
-
-        if (! $runnerCapabilities->supportsPersistentRuntime) {
-            $this->jsRunner->stop();
-        }
+        $runResult = $this->jsWorker->run($plan);
 
         try {
-            app(ReportsPrunerAction::class)->handle();
-        } catch (InvalidArgumentException $e) {
-            Log::warning("Reports pruning failed: {$e->getMessage()}");
-        }
-
-        try {
-            $report = $this->reportReader->readForRun($context);
+            $report = $this->reportReader->readForRun($context, $runResult->stdout);
 
             if ($runResult->exitCode !== 0 && $report->isSuccessful()) {
                 $report = $report->withStats($report->stats->withFailed(1));
@@ -99,7 +79,7 @@ final readonly class E2ERunner
                 "TARGET:\n{$target->name}\n\n".
                 (in_array($testFilter, [null, '', '0'], true) ? '' : "FILTER:\n{$testFilter}\n\n").
                 "RUN_ID:\n{$runId}\n\n".
-                "CMD:\n{$plan->command->command}\n\n".
+                "CMD:\n{$plan->commandPreview}\n\n".
                 "CWD:\n{$plan->command->workingDirectory}\n\n".
                 "STDOUT:\n{$runResult->stdout}\n\n".
                 "STDERR:\n{$runResult->stderr}\n\n".

@@ -13,7 +13,6 @@ use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Support\CliOptions;
-use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
  * @internal
@@ -49,10 +48,9 @@ final readonly class ProcessPlanBuilder
     public function build(RunContextDTO $context, ?ProcessOptionsDTO $options = null): ProcessPlanDTO
     {
         $options ??= new ProcessOptionsDTO;
-        $command = $context->target->command;
+        $isHeaded = CliOptions::$browse || CliOptions::$debug;
 
         $commandDto = new ProcessCommandDTO(
-            command: $command,
             workingDirectory: $context->target->dir,
             env: $context->env,
         );
@@ -60,15 +58,10 @@ final readonly class ProcessPlanBuilder
         $commandDto = $commandDto->withInjectedEnv([
             'PEST_E2E_TARGET' => $context->target->name,
             'PEST_E2E_RUN_ID' => $context->runId,
-            'PEST_E2E_REPORT_PATH' => str_replace('{runId}', $context->runId, $context->target->reportPath),
-            'PEST_E2E_TEST_FILTER' => $context->testFilter ?? '',
-            'PEST_E2E_BROWSE' => CliOptions::$browse ? '1' : '0',
-            'PEST_E2E_DEBUG' => CliOptions::$debug ? '1' : '0',
-            'PEST_E2E_TIMING' => TimingProbe::isEnabled() ? '1' : '0',
         ]);
 
         $options = $options->withTimeoutSeconds(
-            CliOptions::$browse || CliOptions::$debug
+            $isHeaded
                 ? 60 * 60 // 1 hour
                 : $options->timeoutSeconds
         );
@@ -76,6 +69,10 @@ final readonly class ProcessPlanBuilder
         $plan = new ProcessPlanDTO(
             command: $commandDto,
             options: $options,
+            testFilter: $context->testFilter,
+            headed: $isHeaded,
+            debug: CliOptions::$debug,
+            commandPreview: $this->commandPreview($context->testFilter, $isHeaded, CliOptions::$debug),
         );
 
         if ($context->params === []) {
@@ -98,6 +95,10 @@ final readonly class ProcessPlanBuilder
             return new ProcessPlanDTO(
                 command: $commandDto,
                 options: $plan->options,
+                testFilter: $plan->testFilter,
+                headed: $plan->headed,
+                debug: $plan->debug,
+                commandPreview: $plan->commandPreview,
                 params: $paramsDto,
             )->withParamsJsonInline($json);
         }
@@ -111,6 +112,10 @@ final readonly class ProcessPlanBuilder
         return new ProcessPlanDTO(
             command: $commandDto,
             options: $plan->options,
+            testFilter: $plan->testFilter,
+            headed: $plan->headed,
+            debug: $plan->debug,
+            commandPreview: $plan->commandPreview,
             params: $paramsDto,
         )->withParamsJsonFilePath($filePath);
     }
@@ -124,5 +129,25 @@ final readonly class ProcessPlanBuilder
     private function encodeJson(ParamsDTO $paramsDto): string
     {
         return json_encode($paramsDto->toArray(), JSON_THROW_ON_ERROR);
+    }
+
+    private function commandPreview(?string $testFilter, bool $headed, bool $debug): string
+    {
+        $parts = ['playwright', 'test', '--reporter', 'json'];
+
+        if (is_string($testFilter) && $testFilter !== '') {
+            $parts[] = '--grep';
+            $parts[] = $testFilter;
+        }
+
+        if ($headed) {
+            $parts[] = '--headed';
+        }
+
+        if ($debug) {
+            $parts[] = '--debug';
+        }
+
+        return implode(' ', $parts);
     }
 }

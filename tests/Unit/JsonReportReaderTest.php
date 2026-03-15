@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
-use ValcuAndrei\PestE2E\Exceptions\JsonReportParserException;
+use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 
 function makeReport(array $override = []): array
@@ -19,74 +19,55 @@ function makeReport(array $override = []): array
 }
 
 it('reads and validates report for run', function () {
-    $tmp = tempnam(sys_get_temp_dir(), 'pest-e2e-');
-    file_put_contents($tmp, json_encode(makeReport(), JSON_THROW_ON_ERROR));
-
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: $tmp,
         env: [],
         params: [],
     );
 
     $ctx = RunContextDTO::make($target, 'run-123');
+    $stdout = json_encode(makeReport(), JSON_THROW_ON_ERROR);
 
-    $reader = app(JsonReportReader::class);
-    $report = $reader->readForRun($ctx);
+    $reader = new JsonReportReader(new PlaywrightParser);
+    $report = $reader->readForRun($ctx, $stdout);
 
     expect($report->target)->toBe('frontend')
         ->and($report->runId)->toBe('run-123');
-
-    @unlink($tmp);
 });
 
-it('throws when report target mismatches', function () {
-    $tmp = tempnam(sys_get_temp_dir(), 'pest-e2e-');
-    file_put_contents($tmp, json_encode(makeReport(['target' => 'other']), JSON_THROW_ON_ERROR));
-
+it('normalizes report target from run context', function () {
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: $tmp,
         env: [],
         params: [],
     );
 
     $ctx = RunContextDTO::make($target, 'run-123');
+    $stdout = json_encode(makeReport(['target' => 'other']), JSON_THROW_ON_ERROR);
 
-    $reader = app(JsonReportReader::class);
+    $reader = new JsonReportReader(new PlaywrightParser);
 
-    expect(fn () => $reader->readForRun($ctx))
-        ->toThrow(JsonReportParserException::class, 'target mismatch');
+    $report = $reader->readForRun($ctx, $stdout);
 
-    @unlink($tmp);
+    expect($report->target)->toBe('frontend');
 });
 
-it('throws when report runId mismatches', function () {
-    $tmp = tempnam(sys_get_temp_dir(), 'pest-e2e-');
-    file_put_contents($tmp, json_encode(makeReport(['runId' => 'old']), JSON_THROW_ON_ERROR));
-
+it('normalizes report runId from run context', function () {
     $target = new TargetConfigDTO(
         name: 'frontend',
         dir: 'js',
-        command: 'npx playwright test',
-        reportType: 'json',
-        reportPath: $tmp,
         env: [],
         params: [],
     );
 
     $ctx = RunContextDTO::make($target, 'run-123');
+    $stdout = json_encode(makeReport(['runId' => 'old']), JSON_THROW_ON_ERROR);
 
-    $reader = app(JsonReportReader::class);
+    $reader = new JsonReportReader(new PlaywrightParser);
 
-    expect(fn () => $reader->readForRun($ctx))
-        ->toThrow(JsonReportParserException::class, 'runId mismatch');
+    $report = $reader->readForRun($ctx, $stdout);
 
-    @unlink($tmp);
+    expect($report->runId)->toBe('run-123');
 });

@@ -17,9 +17,6 @@ final readonly class TargetConfigDTO
     public function __construct(
         public string $name,
         public string $dir,
-        public string $command,
-        public string $reportType,
-        public string $reportPath,
         public array $env = [],
         public array $params = [],
         public ?string $artifactsDir = null,

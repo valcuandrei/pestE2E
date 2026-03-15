@@ -29,6 +29,8 @@ final class CacheAuthTicketStore implements AuthTicketStoreContract
         array $meta,
         int $ttlSeconds,
     ): void {
+        $this->ensureFileCacheDirectoryExists();
+
         $payload = new AuthTicketDTO(
             userId: $userId,
             guard: $guard,
@@ -75,5 +77,20 @@ final class CacheAuthTicketStore implements AuthTicketStoreContract
     private function key(string $ticket): string
     {
         return 'pest-e2e:auth-ticket:'.$ticket;
+    }
+
+    private function ensureFileCacheDirectoryExists(): void
+    {
+        if (config('cache.default') !== 'file') {
+            return;
+        }
+
+        $path = config('cache.stores.file.path');
+
+        if (! is_string($path) || $path === '' || is_dir($path)) {
+            return;
+        }
+
+        @mkdir($path, 0775, true);
     }
 }

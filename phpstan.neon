@@ -3,7 +3,7 @@ parameters:
     paths:
         - src
     excludePaths:
-        - src/stubs/
+        - src/stubs/ (?)
 
     reportUnmatchedIgnoredErrors: true
     parallel:

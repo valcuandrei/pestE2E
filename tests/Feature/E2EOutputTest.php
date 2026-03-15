@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
+use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
+use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
+use ValcuAndrei\PestE2E\DTO\ProcessResultDTO;
 use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
@@ -13,23 +16,20 @@ use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
 beforeEach(function () {
-    app(E2EOutputStore::class)->flush();
+    $store = app(E2EOutputStore::class);
+    $store->flush();
+    $store->flushPerTestEntries();
 });
 
 it('nests e2e output under the current test name', function () {
-    $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $testName = test()->getPrintableTestCaseMethodName();
 
-    expect($reportPath)->not->toBeFalse();
     $reportDTO = JsonReportDTO::fakeWithPassedTest();
-    $reportB64 = base64_encode($reportDTO->toJson());
+    bindWorkerReturningReport($reportDTO);
 
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        command: getReportCommand($reportPath, $reportB64),
-        reportType: 'json',
-        reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
@@ -38,38 +38,28 @@ it('nests e2e output under the current test name', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    try {
-        e2e($reportDTO->target)->run();
+    e2e($reportDTO->target)->run();
 
-        $entries = app(E2EOutputStore::class)->all();
-        $lines = $entries[0]->lines;
-        $text = implode("\n", $lines);
-        $plainText = normalizeFormattedOutput($text);
-        $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
+    $entries = allPerTestEntries();
+    $lines = $entries[0]->lines;
+    $text = implode("\n", $lines);
+    $plainText = normalizeFormattedOutput($text);
+    $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
 
-        expect($entries)->toHaveCount(1)
-            ->and($lines[0])->toBe($testName)
-            ->and($lines[1])->toContain($branchPrefix.'E2E › '.$reportDTO->target.' (runId '.$reportDTO->runId.')')
-            ->and($plainText)->toContain('✓ '.$reportDTO->getPassedTests()[0]->name)
-            ->and($plainText)->toContain('passed=1 failed=0 skipped=0');
-    } finally {
-        @unlink($reportPath);
-    }
+    expect($entries)->toHaveCount(1)
+        ->and($lines[0])->toBe($testName)
+        ->and($lines[1])->toContain($branchPrefix.'E2E › '.$reportDTO->target.' (runId '.$reportDTO->runId.')')
+        ->and($plainText)->toContain('✓ '.$reportDTO->getPassedTests()[0]->name)
+        ->and($plainText)->toContain('passed=1 failed=0 skipped=0');
 });
 
 it('stores a passed run summary when the target succeeds', function () {
-    $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $reportDTO = JsonReportDTO::fakeWithPassedTest();
-    $reportB64 = base64_encode($reportDTO->toJson());
-
-    expect($reportPath)->not->toBeFalse();
+    bindWorkerReturningReport($reportDTO);
 
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        command: getReportCommand($reportPath, $reportB64),
-        reportType: 'json',
-        reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
@@ -78,37 +68,27 @@ it('stores a passed run summary when the target succeeds', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    try {
-        e2e($reportDTO->target)->run();
+    e2e($reportDTO->target)->run();
 
-        $entries = app(E2EOutputStore::class)->all();
-        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
+    $entries = allPerTestEntries();
+    $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
-        expect($entries)->toHaveCount(1)
-            ->and($entries[0]->ok)->toBeTrue()
-            ->and($entries[0]->runId)->toBe($reportDTO->runId)
-            ->and($text)->toContain('✓ '.$reportDTO->getPassedTests()[0]->name)
-            ->and($text)->toContain('passed=1 failed=0 skipped=0')
-            ->and($text)->toContain($reportDTO->target)
-            ->and($text)->toContain($reportDTO->runId);
-    } finally {
-        @unlink($reportPath);
-    }
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->ok)->toBeTrue()
+        ->and($entries[0]->runId)->toBe($reportDTO->runId)
+        ->and($text)->toContain('✓ '.$reportDTO->getPassedTests()[0]->name)
+        ->and($text)->toContain('passed=1 failed=0 skipped=0')
+        ->and($text)->toContain($reportDTO->target)
+        ->and($text)->toContain($reportDTO->runId);
 });
 
 it('stores a failed run summary and rethrows on failures', function () {
-    $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $reportDTO = JsonReportDTO::fakeWithFailedTest();
-    $reportB64 = base64_encode($reportDTO->toJson());
-
-    expect($reportPath)->not->toBeFalse();
+    bindWorkerReturningReport($reportDTO);
 
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        command: getReportCommand($reportPath, $reportB64),
-        reportType: 'json',
-        reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
@@ -117,40 +97,31 @@ it('stores a failed run summary and rethrows on failures', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    try {
-        expect(fn () => e2e($reportDTO->target)->run())->toThrow(\RuntimeException::class);
+    expect(fn () => e2e($reportDTO->target)->run())->toThrow(\RuntimeException::class);
 
-        $entries = app(E2EOutputStore::class)->all();
-        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
+    $entries = allPerTestEntries();
+    $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
-        expect($entries)->toHaveCount(1)
-            ->and($entries[0]->ok)->toBeFalse()
-            ->and($entries[0]->runId)->toBe($reportDTO->runId)
-            ->and($text)->toContain('✗ '.$reportDTO->getFailedTests()[0]->name)
-            ->and($text)->toContain('failed=1')
-            ->and($text)->toContain($reportDTO->target)
-            ->and($text)->toContain($reportDTO->runId);
-    } finally {
-        @unlink($reportPath);
-    }
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->ok)->toBeFalse()
+        ->and($entries[0]->runId)->toBe($reportDTO->runId)
+        ->and($text)->toContain('✗ '.$reportDTO->getFailedTests()[0]->name)
+        ->and($text)->toContain('failed=1')
+        ->and($text)->toContain($reportDTO->target)
+        ->and($text)->toContain($reportDTO->runId);
 });
 
 it('runs filtered test with only() method', function () {
-    $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $reportDTO = JsonReportDTO::fake()
         ->withStats(JsonReportStatsDTO::fakePassed(1))
         ->withTests([JsonReportTestDTO::fakePassed()->withName('can checkout')]);
-
-    expect($reportPath)->not->toBeFalse();
-
-    file_put_contents($reportPath, $reportDTO->toJson());
+    bindWorkerReturningReport($reportDTO, function (ProcessPlanDTO $plan): void {
+        expect($plan->testFilter)->toBe('can checkout');
+    });
 
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        command: 'echo "Mock test runner with filter" && exit 0',
-        reportType: 'json',
-        reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
@@ -159,38 +130,29 @@ it('runs filtered test with only() method', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    try {
-        e2e($reportDTO->target)->only('can checkout')->run();
+    e2e($reportDTO->target)->only('can checkout')->run();
 
-        $entries = app(E2EOutputStore::class)->all();
-        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
+    $entries = allPerTestEntries();
+    $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
-        expect($entries)->toHaveCount(1)
-            ->and($entries[0]->ok)->toBeTrue()
-            ->and($entries[0]->runId)->toBe($reportDTO->runId)
-            ->and($text)->toContain('✓ can checkout')
-            ->and($text)->toContain('passed=1 failed=0 skipped=0');
-    } finally {
-        @unlink($reportPath);
-    }
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->ok)->toBeTrue()
+        ->and($entries[0]->runId)->toBe($reportDTO->runId)
+        ->and($text)->toContain('✓ can checkout')
+        ->and($text)->toContain('passed=1 failed=0 skipped=0');
 });
 
 it('fails when using only() with failed test', function () {
-    $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $reportDTO = JsonReportDTO::fake()
         ->withStats(JsonReportStatsDTO::fakeFailed(1))
         ->withTests([JsonReportTestDTO::fakeFailed()->withName('can checkout')]);
-
-    expect($reportPath)->not->toBeFalse();
-
-    file_put_contents($reportPath, $reportDTO->toJson());
+    bindWorkerReturningReport($reportDTO, function (ProcessPlanDTO $plan): void {
+        expect($plan->testFilter)->toBe('can checkout');
+    });
 
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        command: 'echo "Mock test runner with filter" && exit 0',
-        reportType: 'json',
-        reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
@@ -199,38 +161,29 @@ it('fails when using only() with failed test', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    try {
-        expect(fn () => e2e($reportDTO->target)->only('can checkout')->run())
-            ->toThrow(RuntimeException::class);
+    expect(fn () => e2e($reportDTO->target)->only('can checkout')->run())
+        ->toThrow(RuntimeException::class);
 
-        $entries = app(E2EOutputStore::class)->all();
-        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
+    $entries = allPerTestEntries();
+    $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
-        expect($entries)->toHaveCount(1)
-            ->and($entries[0]->ok)->toBeFalse()
-            ->and($text)->toContain('✗ can checkout')
-            ->and($text)->toContain('failed=1');
-    } finally {
-        @unlink($reportPath);
-    }
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->ok)->toBeFalse()
+        ->and($text)->toContain('✗ can checkout')
+        ->and($text)->toContain('failed=1');
 });
 
 it('runTest() is equivalent to only()->run()', function () {
-    $reportPath = tempnam(sys_get_temp_dir(), 'pest-e2e-report-');
     $reportDTO = JsonReportDTO::fake()
         ->withStats(JsonReportStatsDTO::fakePassed(1))
         ->withTests([JsonReportTestDTO::fakePassed()->withName('can checkout')]);
-
-    expect($reportPath)->not->toBeFalse();
-
-    file_put_contents($reportPath, $reportDTO->toJson());
+    bindWorkerReturningReport($reportDTO, function (ProcessPlanDTO $plan): void {
+        expect($plan->testFilter)->toBe('can checkout');
+    });
 
     $target = new TargetConfigDTO(
         name: $reportDTO->target,
         dir: getcwd(),
-        command: 'echo "Mock test runner with filter" && exit 0',
-        reportType: 'json',
-        reportPath: $reportPath,
         env: [],
         params: [],
         artifactsDir: null,
@@ -239,28 +192,93 @@ it('runTest() is equivalent to only()->run()', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    try {
-        e2e($reportDTO->target)->runTest('can checkout');
+    e2e($reportDTO->target)->runTest('can checkout');
 
-        $entries = app(E2EOutputStore::class)->all();
-        $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
+    $entries = allPerTestEntries();
+    $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
 
-        expect($entries)->toHaveCount(1)
-            ->and($entries[0]->ok)->toBeTrue()
-            ->and($text)->toContain('✓ can checkout')
-            ->and($text)->toContain('passed=1 failed=0 skipped=0');
-    } finally {
-        @unlink($reportPath);
-    }
+    expect($entries)->toHaveCount(1)
+        ->and($entries[0]->ok)->toBeTrue()
+        ->and($text)->toContain('✓ can checkout')
+        ->and($text)->toContain('passed=1 failed=0 skipped=0');
 });
 
-function getReportCommand(string $reportPath, string $reportB64): string
+/**
+ * @param  callable(ProcessPlanDTO):void|null  $assertPlan
+ */
+function bindWorkerReturningReport(JsonReportDTO $report, ?callable $assertPlan = null): void
 {
-    return 'php -r "file_put_contents('
-        .var_export($reportPath, true)
-        .', base64_decode('
-        .var_export($reportB64, true)
-        .'));"';
+    app()->instance(JsWorkerContract::class, new class($report, $assertPlan) implements JsWorkerContract
+    {
+        /**
+         * @param  callable(ProcessPlanDTO):void|null  $assertPlan
+         */
+        public function __construct(private readonly JsonReportDTO $report, private readonly mixed $assertPlan) {}
+
+        public function run(ProcessPlanDTO $plan): ProcessResultDTO
+        {
+            if (is_callable($this->assertPlan)) {
+                ($this->assertPlan)($plan);
+            }
+
+            return new ProcessResultDTO(
+                exitCode: 0,
+                stdout: toPlaywrightJson($this->report),
+                stderr: '',
+                durationSeconds: 0.05,
+            );
+        }
+    });
+}
+
+function toPlaywrightJson(JsonReportDTO $report): string
+{
+    $specs = [];
+
+    foreach ($report->tests as $test) {
+        $result = [
+            'status' => $test->status->value,
+            'duration' => $test->durationMs ?? 1,
+            'stdout' => [],
+            'stderr' => [],
+        ];
+
+        if ($test->error !== null) {
+            $result['errors'] = [[
+                'message' => $test->error->message,
+                'stack' => $test->error->stack,
+            ]];
+        }
+
+        $specs[] = [
+            'title' => $test->name,
+            'tests' => [[
+                'results' => [$result],
+            ]],
+        ];
+    }
+
+    return json_encode([
+        'suites' => [[
+            'file' => 'tests/e2e/spec.ts',
+            'specs' => $specs,
+        ]],
+    ], JSON_THROW_ON_ERROR);
+}
+
+/**
+ * @return array<int, \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO>
+ */
+function allPerTestEntries(): array
+{
+    $store = app(E2EOutputStore::class);
+
+    $perTest = $store->getAllPerTestEntries();
+    if ($perTest !== []) {
+        return $perTest[array_key_first($perTest)] ?? [];
+    }
+
+    return $store->all();
 }
 
 function normalizeFormattedOutput(string $text): string
