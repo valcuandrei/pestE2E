@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
+use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
@@ -97,7 +98,7 @@ it('stores a failed run summary and rethrows on failures', function () {
     app()->instance(RunIdGeneratorContract::class, new FixedRunIdGenerator($reportDTO->runId));
     app(TargetRegistry::class)->put($target);
 
-    expect(fn () => e2e($reportDTO->target)->run())->toThrow(\RuntimeException::class);
+    expect(fn () => e2e($reportDTO->target)->run())->toThrow(RuntimeException::class);
 
     $entries = allPerTestEntries();
     $text = normalizeFormattedOutput(implode("\n", $entries[0]->lines));
@@ -267,7 +268,7 @@ function toPlaywrightJson(JsonReportDTO $report): string
 }
 
 /**
- * @return array<int, \ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO>
+ * @return array<int, E2EOutputEntryDTO>
  */
 function allPerTestEntries(): array
 {

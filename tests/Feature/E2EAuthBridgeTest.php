@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\HasApiTokens;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Tests\Fakes\FakeUser;
 use ValcuAndrei\PestE2E\Tests\Support\ArrayUserProvider;
@@ -128,7 +129,7 @@ it('handles sanctum mode availability', function () {
         pestE2eAuthHeader(),
     );
 
-    if (class_exists(\Laravel\Sanctum\HasApiTokens::class)) {
+    if (class_exists(HasApiTokens::class)) {
         $response->assertOk()->assertJsonStructure(['token']);
     } else {
         $response->assertServerError()->assertJsonStructure(['message']);

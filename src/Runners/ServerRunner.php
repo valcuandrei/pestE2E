@@ -265,7 +265,9 @@ final class ServerRunner
     {
         $socket = @stream_socket_server("tcp://{$host}:0", $errno, $errstr);
         if ($socket === false) {
-            throw new RuntimeException("Unable to allocate a free port: {$errstr} ({$errno})");
+            /** @var int $errno */
+            /** @var string $errstr */
+            throw new RuntimeException(sprintf('Unable to allocate a free port: %s (%s)', $errstr, $errno));
         }
 
         $name = stream_socket_get_name($socket, false);

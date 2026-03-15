@@ -24,7 +24,7 @@ final class PlaywrightParser implements JsonParserContract
             /** @var mixed $data */
             $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            throw new JsonReportParserException("Invalid JSON: {$e->getMessage()}", previous: $e);
+            throw new JsonReportParserException("Invalid JSON: {$e->getMessage()}", $e->getCode(), previous: $e);
         }
 
         if (! is_array($data)) {

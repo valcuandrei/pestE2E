@@ -93,7 +93,7 @@ if (! function_exists('e2e')) {
             if (method_exists($container, 'register')) {
                 try {
                     $container->register(PestE2EServiceProvider::class);
-                } catch (\Throwable $e) {
+                } catch (Throwable $e) {
                     // Fall back to manual bindings if the service provider can't boot
                 }
             }
@@ -115,7 +115,7 @@ if (! function_exists('e2e')) {
             if (! $container->bound(E2E::class)) {
                 $container->bind(E2E::class, function ($container) {
                     return new E2E(
-                        $container->make(\ValcuAndrei\PestE2E\E2E::class),
+                        $container->make(ValcuAndrei\PestE2E\E2E::class),
                         $container
                     );
                 });

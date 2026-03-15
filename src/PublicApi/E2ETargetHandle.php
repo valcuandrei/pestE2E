@@ -220,7 +220,7 @@ final class E2ETargetHandle
             $serverType = ServerRunnerType::tryFrom(config()->string('pest-e2e.server.driver', ServerRunnerType::ARTISAN->value)) ?? ServerRunnerType::ARTISAN;
 
             [$report, $ok, $thrown] = ServerRunner::instance($serverType)->whenReady(
-                /** @return array{0: JsonReportDTO, 1: bool, 2: ?\RuntimeException} */
+                /** @return array{0: JsonReportDTO, 1: bool, 2: ?RuntimeException} */
                 function (string $baseUrl) use ($runId): array {
                     $report = $this->root->runner()->run(
                         targetName: $this->target,
@@ -239,9 +239,9 @@ final class E2ETargetHandle
             );
         } catch (\Throwable $e) {
             $ok = false;
-            $thrown = $e instanceof \RuntimeException
+            $thrown = $e instanceof RuntimeException
                 ? $e
-                : new \RuntimeException($e->getMessage(), (int) $e->getCode(), $e);
+                : new RuntimeException($e->getMessage(), (int) $e->getCode(), $e);
         }
 
         $durationSeconds = microtime(true) - $startedAt;
@@ -291,7 +291,7 @@ final class E2ETargetHandle
             );
         }
 
-        if ($thrown instanceof \RuntimeException) {
+        if ($thrown instanceof RuntimeException) {
             throw $thrown;
         }
     }

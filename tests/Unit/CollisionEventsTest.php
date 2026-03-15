@@ -71,7 +71,7 @@ it('prints inline e2e output after the test line and does not repeat at the end'
 
 function makeTestResult(string $testId): TestResult
 {
-    $reflection = new \ReflectionClass(TestResult::class);
+    $reflection = new ReflectionClass(TestResult::class);
     $result = $reflection->newInstanceWithoutConstructor();
     $result->id = $testId;
 

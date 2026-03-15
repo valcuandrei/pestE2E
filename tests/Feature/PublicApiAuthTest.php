@@ -59,7 +59,7 @@ it('throws a friendly exception when actingAs is used without an auth ticket iss
 
     expect(fn () => e2e('frontend')->actingAs($user))
         ->toThrow(
-            \RuntimeException::class,
+            RuntimeException::class,
             'No auth ticket issuer configured'
         );
 });

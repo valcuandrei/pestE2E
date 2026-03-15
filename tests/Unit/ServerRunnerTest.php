@@ -34,9 +34,9 @@ it('rethrows exception from callback', function () {
 
     expect(
         fn () => $runner->whenReady(
-            fn () => throw new \RuntimeException('boom')
+            fn () => throw new RuntimeException('boom')
         )
-    )->toThrow(\RuntimeException::class, 'boom');
+    )->toThrow(RuntimeException::class, 'boom');
 });
 
 it('returns the same runner instance for the same driver', function () {
