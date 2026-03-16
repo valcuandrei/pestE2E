@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E;
 
-use Pest\Collision\Events;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\HandlesArguments;
 use Pest\Contracts\Plugins\Terminable;
 use Symfony\Component\Console\Output\OutputInterface;
+use ValcuAndrei\PestE2E\Collision\Events;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
 use ValcuAndrei\PestE2E\Runners\ServerRunner;
 use ValcuAndrei\PestE2E\Support\CliOptions;

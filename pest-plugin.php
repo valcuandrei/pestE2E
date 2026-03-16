@@ -2,7 +2,20 @@
 
 declare(strict_types=1);
 
-require_once __DIR__.'/src/Collision/Events.php';
+spl_autoload_register(
+    function (string $class): bool {
+        if ($class !== 'Pest\\Collision\\Events') {
+            return false;
+        }
+
+        require_once __DIR__.'/src/Collision/Events.php';
+        class_alias('ValcuAndrei\\PestE2E\\Collision\\Events', $class);
+
+        return true;
+    },
+    true,
+    true
+);
 
 use ValcuAndrei\PestE2E\Actions\DefaultE2EAuthAction;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;

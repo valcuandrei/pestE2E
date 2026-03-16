@@ -18,7 +18,6 @@
     },
     "autoload": {
         "psr-4": {
-            "Pest\\Collision\\": "src/Collision/",
             "ValcuAndrei\\PestE2E\\": "src/"
         },
         "files": [

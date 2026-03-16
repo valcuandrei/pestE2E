@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Pest\Collision;
+namespace ValcuAndrei\PestE2E\Collision;
 
 use NunoMaduro\Collision\Adapters\Phpunit\TestResult;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -11,8 +11,9 @@ use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 /**
  * Hooks used by Collision's test line renderer.
  *
- * This class is discovered by Collision using class_exists() checks and allows
- * us to append E2E lines immediately after each Pest test line.
+ * This class is exposed as Pest\Collision\Events via class_alias so Collision
+ * discovers it, allowing us to append E2E lines immediately after each Pest
+ * test line while delegating to Pest's original Events for issues, notes, etc.
  *
  * @internal
  */
@@ -27,11 +28,13 @@ final class Events
 
     public static function beforeTestMethodDescription(TestResult $result, string $description): string
     {
-        return $description;
+        return PestEventsBridge::beforeTestMethodDescription($result, $description);
     }
 
     public static function afterTestMethodDescription(TestResult $result): void
     {
+        PestEventsBridge::afterTestMethodDescription($result);
+
         if (! function_exists('app')) {
             return;
         }

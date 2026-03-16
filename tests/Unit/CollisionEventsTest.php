@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use NunoMaduro\Collision\Adapters\Phpunit\TestResult;
-use Pest\Collision\Events;
 use Symfony\Component\Console\Output\BufferedOutput;
+use ValcuAndrei\PestE2E\Collision\Events;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\Plugin;

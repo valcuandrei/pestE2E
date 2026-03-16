@@ -56,7 +56,6 @@ final class PestE2EServiceProvider extends ServiceProvider
 
             $this->publishes([
                 __DIR__.'/../resources/js/pest-e2e/playwright.mjs' => resource_path('js/pest-e2e/playwright.mjs'),
-                __DIR__.'/../resources/js/pest-e2e/playwright' => resource_path('js/pest-e2e/playwright'),
             ], 'pest-e2e-js-playwright');
 
             $this->publishes([
