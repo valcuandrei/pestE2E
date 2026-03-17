@@ -94,11 +94,20 @@ final class ServerRunner
 
         $basePath = $this->basePath();
 
+        $publicPath = $basePath.'/public';
+
         $env = array_merge($_ENV, [
             'APP_ENV' => 'testing',
             'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
             'APP_URL' => $this->baseUrl(),
             'PEST_E2E_BASE_PATH' => $basePath,
+            'PEST_E2E_PUBLIC_PATH' => $publicPath,
+            // phpunit.xml sets SESSION_DRIVER=array for unit/feature tests, but the E2E
+            // server runs in a separate process and needs a persistent session driver
+            // so auth sessions survive across requests.
+            'SESSION_DRIVER' => ($_ENV['SESSION_DRIVER'] ?? '') === 'array' ? 'database' : ($_ENV['SESSION_DRIVER'] ?? 'database'),
+            // Single worker for PHP built-in server to avoid session/state issues.
+            'PHP_CLI_SERVER_WORKERS' => '1',
         ]);
 
         $this->process = new Process(
@@ -154,6 +163,35 @@ final class ServerRunner
     }
 
     /**
+     * Command: php -S 127.0.0.1:8000 -t public <package>/resources/server-router.php.
+     * Uses the package's bundled router so static assets are served with correct
+     * MIME types; no app modification required.
+     *
+     * @return list<string>
+     */
+    private function phpBuiltinCommand(): array
+    {
+        $basePath = $this->basePath();
+        $publicPath = $basePath.'/public';
+        $routerPath = dirname(__DIR__, 2).'/resources/server-router.php';
+
+        if (! is_file($routerPath)) {
+            throw new RuntimeException(
+                'Package router script not found at: '.$routerPath
+            );
+        }
+
+        return [
+            'php',
+            '-S',
+            "{$this->host}:{$this->port}",
+            '-t',
+            $publicPath,
+            $routerPath,
+        ];
+    }
+
+    /**
      * The command to start the server.
      *
      * @return list<string>
@@ -162,6 +200,7 @@ final class ServerRunner
     {
         return match ($this->type) {
             ServerRunnerType::ARTISAN => $this->artisanCommand(),
+            ServerRunnerType::PHP_BUILTIN => $this->phpBuiltinCommand(),
         };
     }
 

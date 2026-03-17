@@ -14,6 +14,7 @@ abstract class E2ETestCase extends TestCase
      */
     protected function setUp(): void
     {
+        $this->markAsE2ETest();
         parent::setUp();
 
         if (self::$e2eTargetsRegistered) {
@@ -27,5 +28,13 @@ abstract class E2ETestCase extends TestCase
             ->env(['APP_URL' => 'http://localhost'])
             ->params(['baseUrl' => 'http://localhost'])
         );
+    }
+
+    /**
+     * Mark the test as an E2E test.
+     */
+    private function markAsE2ETest(): void
+    {
+        $_ENV['IS_E2E_TEST'] = true;
     }
 }

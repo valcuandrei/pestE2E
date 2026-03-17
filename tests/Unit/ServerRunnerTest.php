@@ -2,18 +2,20 @@
 
 declare(strict_types=1);
 
+use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
 use ValcuAndrei\PestE2E\Runners\ServerRunner;
 
 beforeEach(function () {
     ServerRunner::stopAll();
+    unset($_ENV['IS_E2E_TEST']);
 });
 
 afterEach(function () {
     ServerRunner::stopAll();
 });
 
-it('skips starting server when laravel app is not servable', function () {
-    $runner = ServerRunner::instance();
+it('skips starting server when laravel app is not servable', function (ServerRunnerType $type) {
+    $runner = ServerRunner::instance($type);
 
     $called = false;
 
@@ -27,29 +29,48 @@ it('skips starting server when laravel app is not servable', function () {
 
     expect($called)->toBeTrue()
         ->and($result)->toBe('ok');
-});
+})->with([
+    'artisan' => [ServerRunnerType::ARTISAN],
+    'php_builtin' => [ServerRunnerType::PHP_BUILTIN],
+]);
 
-it('rethrows exception from callback', function () {
-    $runner = ServerRunner::instance();
+it('rethrows exception from callback', function (ServerRunnerType $type) {
+    $runner = ServerRunner::instance($type);
 
     expect(
         fn () => $runner->whenReady(
             fn () => throw new RuntimeException('boom')
         )
     )->toThrow(RuntimeException::class, 'boom');
-});
+})->with([
+    'artisan' => [ServerRunnerType::ARTISAN],
+    'php_builtin' => [ServerRunnerType::PHP_BUILTIN],
+]);
 
-it('returns the same runner instance for the same driver', function () {
-    $first = ServerRunner::instance();
-    $second = ServerRunner::instance();
+it('returns the same runner instance for the same driver', function (ServerRunnerType $type) {
+    $first = ServerRunner::instance($type);
+    $second = ServerRunner::instance($type);
 
     expect($first)->toBe($second);
+})->with([
+    'artisan' => [ServerRunnerType::ARTISAN],
+    'php_builtin' => [ServerRunnerType::PHP_BUILTIN],
+]);
+
+it('returns different runner instances for different drivers', function () {
+    $artisan = ServerRunner::instance(ServerRunnerType::ARTISAN);
+    $phpBuiltin = ServerRunner::instance(ServerRunnerType::PHP_BUILTIN);
+
+    expect($artisan)->not->toBe($phpBuiltin);
 });
 
-it('clears runner instances when stopAll is called', function () {
-    $first = ServerRunner::instance();
+it('clears runner instances when stopAll is called', function (ServerRunnerType $type) {
+    $first = ServerRunner::instance($type);
     ServerRunner::stopAll();
-    $second = ServerRunner::instance();
+    $second = ServerRunner::instance($type);
 
     expect($second)->not->toBe($first);
-});
+})->with([
+    'artisan' => [ServerRunnerType::ARTISAN],
+    'php_builtin' => [ServerRunnerType::PHP_BUILTIN],
+]);

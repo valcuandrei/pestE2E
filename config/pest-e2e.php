@@ -21,7 +21,7 @@ return [
         ],
     ],
     'server' => [
-        'driver' => env('PEST_E2E_SERVER_DRIVER', 'artisan'), // artisan - No other options yet
+        'driver' => env('PEST_E2E_SERVER_DRIVER', 'php_builtin'), // php_builtin or artisan
     ],
     'timing' => [
         'enabled' => env('PEST_E2E_TIMING', false),

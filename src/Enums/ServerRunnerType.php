@@ -17,4 +17,10 @@ enum ServerRunnerType: string
      * Use the artisan server.
      */
     case ARTISAN = 'artisan';
+
+    /**
+     * Use the PHP built-in server.
+     * php -S 127.0.0.1:8000 -t public <package>/resources/server-router.php.
+     */
+    case PHP_BUILTIN = 'php_builtin';
 }
