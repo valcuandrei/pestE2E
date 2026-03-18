@@ -63,14 +63,12 @@ final class InstallCommand extends Command
         $addCsrfExclusion = $this->shouldAddCsrfExclusion();
 
         if ($addCsrfExclusion) {
-            if ($this->addCsrfExclusion($force) === self::SUCCESS) {
+            if ($this->addCsrfExclusion() === self::SUCCESS) {
                 if (! $quiet) {
                     $this->info('CSRF exclusion for pest-e2e auth route added successfully.');
                 }
-            } else {
-                if (! $quiet) {
-                    $this->warn('Could not add CSRF exclusion. Add manually: $middleware->validateCsrfTokens(except: [\'/pest-e2e/auth/login\']);');
-                }
+            } elseif (! $quiet) {
+                $this->warn('Could not add CSRF exclusion. Add manually: $middleware->validateCsrfTokens(except: [\'/pest-e2e/auth/login\']);');
             }
         }
 
@@ -455,30 +453,26 @@ final class InstallCommand extends Command
     /**
      * Add the pest-e2e auth route to CSRF exclusion in bootstrap/app.php.
      */
-    private function addCsrfExclusion(bool $force = false): int
+    private function addCsrfExclusion(): int
     {
         $path = base_path('bootstrap/app.php');
         if (! is_file($path)) {
             return self::FAILURE;
         }
-
         $content = file_get_contents($path);
         if ($content === false) {
             return self::FAILURE;
         }
-
         $exclusion = "validateCsrfTokens(except: ['/pest-e2e/auth/login'])";
         if (str_contains($content, $exclusion) || str_contains($content, 'pest-e2e/auth/login')) {
             return self::SUCCESS;
         }
-
         $newContent = preg_replace(
             '/(\$middleware->encryptCookies\([^)]+\);)/',
             '$1'."\n        \$middleware->".$exclusion.';',
             $content,
             1
         );
-
         if ($newContent === null || $newContent === $content) {
             return self::FAILURE;
         }
