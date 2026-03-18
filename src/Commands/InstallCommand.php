@@ -20,8 +20,9 @@ final class InstallCommand extends Command
         .' {--publish-base-test-case : Publish the Pest E2E base test case}'
         .' {--publish-js-harness : Publish the Pest E2E JS harness}'
         .' {--publish-js-playwright : Publish the Pest E2E JS Playwright}'
+        .' {--add-csrf-exclusion : Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows)}'
         .' {--install-playwright : Install Playwright}'
-        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright)}'
+        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion)}'
         .' {--no : Answer no to all questions (can be overridden by the individual options)}'
         .' {--unattended : Answer yes to all questions (shortcut for --yes)}';
 
@@ -59,6 +60,19 @@ final class InstallCommand extends Command
         $installPlaywright = $hasPlaywrightInstalled ? false : $this->shouldInstallPlaywright();
         $publishJsHarness = $this->shouldPublishJsHarness();
         $publishJsPlaywright = ($hasPlaywrightInstalled || $installPlaywright) && $this->shouldPublishJsPlaywright();
+        $addCsrfExclusion = $this->shouldAddCsrfExclusion();
+
+        if ($addCsrfExclusion) {
+            if ($this->addCsrfExclusion($force) === self::SUCCESS) {
+                if (! $quiet) {
+                    $this->info('CSRF exclusion for pest-e2e auth route added successfully.');
+                }
+            } else {
+                if (! $quiet) {
+                    $this->warn('Could not add CSRF exclusion. Add manually: $middleware->validateCsrfTokens(except: [\'/pest-e2e/auth/login\']);');
+                }
+            }
+        }
 
         if ($publishBaseTestCase) {
             if ($this->publishBaseTestCase($force) === self::SUCCESS) {
@@ -428,6 +442,48 @@ final class InstallCommand extends Command
     private function shouldInstallPlaywright(): bool
     {
         return $this->shouldAccept('install-playwright', 'This package requires installing Playwright. Install it now?');
+    }
+
+    /**
+     * Should add CSRF exclusion for pest-e2e auth route.
+     */
+    private function shouldAddCsrfExclusion(): bool
+    {
+        return $this->shouldAccept('add-csrf-exclusion', 'Add pest-e2e auth route to CSRF exclusion? (required for Herd/Windows)', true);
+    }
+
+    /**
+     * Add the pest-e2e auth route to CSRF exclusion in bootstrap/app.php.
+     */
+    private function addCsrfExclusion(bool $force = false): int
+    {
+        $path = base_path('bootstrap/app.php');
+        if (! is_file($path)) {
+            return self::FAILURE;
+        }
+
+        $content = file_get_contents($path);
+        if ($content === false) {
+            return self::FAILURE;
+        }
+
+        $exclusion = "validateCsrfTokens(except: ['/pest-e2e/auth/login'])";
+        if (str_contains($content, $exclusion) || str_contains($content, 'pest-e2e/auth/login')) {
+            return self::SUCCESS;
+        }
+
+        $newContent = preg_replace(
+            '/(\$middleware->encryptCookies\([^)]+\);)/',
+            '$1'."\n        \$middleware->".$exclusion.';',
+            $content,
+            1
+        );
+
+        if ($newContent === null || $newContent === $content) {
+            return self::FAILURE;
+        }
+
+        return file_put_contents($path, $newContent) !== false ? self::SUCCESS : self::FAILURE;
     }
 
     /**
