@@ -157,6 +157,32 @@ it('detectedLockfiles returns only existing lockfiles', function (): void {
         ->and($result)->not->toHaveKey('bun');
 });
 
+it('defaultPackageManagerKeyFromLockfiles returns npm when no lockfile exists', function (): void {
+    expect($this->manager->defaultPackageManagerKeyFromLockfiles())->toBe('npm');
+});
+
+it('defaultPackageManagerKeyFromLockfiles returns yarn when only yarn.lock exists', function (): void {
+    file_put_contents($this->tempDir.'/yarn.lock', '');
+
+    expect($this->manager->defaultPackageManagerKeyFromLockfiles())->toBe('yarn');
+});
+
+it('defaultPackageManagerKeyFromLockfiles prefers pnpm over yarn when both exist', function (): void {
+    file_put_contents($this->tempDir.'/yarn.lock', '');
+    file_put_contents($this->tempDir.'/pnpm-lock.yaml', '');
+
+    expect($this->manager->defaultPackageManagerKeyFromLockfiles())->toBe('pnpm');
+});
+
+it('packageManagerKeysInRegistrationOrder lists package managers in definition order', function (): void {
+    $keys = $this->manager->packageManagerKeysInRegistrationOrder();
+
+    expect($keys[0])->toBe('pnpm')
+        ->and($keys[1])->toBe('yarn')
+        ->and($keys[2])->toBe('bun')
+        ->and($keys[3])->toBe('npm');
+});
+
 it('getPackageManager returns locked but unavailable when lockfile exists and binary not available', function (): void {
     file_put_contents($this->tempDir.'/pnpm-lock.yaml', '');
 

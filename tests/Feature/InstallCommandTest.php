@@ -5,7 +5,9 @@ declare(strict_types=1);
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\OutputInterface;
 use ValcuAndrei\PestE2E\Commands\InstallCommand;
+use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 use ValcuAndrei\PestE2E\Tests\Support\FakePublishCommand;
 use ValcuAndrei\PestE2E\Tests\Support\MockJsPackageManager;
@@ -16,8 +18,60 @@ function createInstallTestEnv(string $tempDir): void
     mkdir($tempDir.'/database', 0755, true);
     file_put_contents(
         $tempDir.'/phpunit.xml',
-        '<?xml version="1.0"?><phpunit><php><env name="DB_CONNECTION" value="sqlite"/><env name="CACHE_STORE" value="array"/><env name="SESSION_DRIVER" value="array"/></php></phpunit>'
+        '<?xml version="1.0"?><phpunit><php><env name="DB_CONNECTION" value="sqlite"/><env name="DB_DATABASE" value="laravel"/><env name="CACHE_STORE" value="array"/><env name="SESSION_DRIVER" value="array"/></php></phpunit>'
     );
+}
+
+function createBootstrapAppWithEncryptCookies(string $tempDir): void
+{
+    mkdir($tempDir.'/bootstrap', 0755, true);
+    file_put_contents(
+        $tempDir.'/bootstrap/app.php',
+        <<<'PHP'
+<?php
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withMiddleware(function ($middleware) {
+        $middleware->encryptCookies(except: []);
+    });
+PHP
+    );
+}
+
+function createBootstrapAppWithoutCsrfHook(string $tempDir): void
+{
+    mkdir($tempDir.'/bootstrap', 0755, true);
+    file_put_contents(
+        $tempDir.'/bootstrap/app.php',
+        <<<'PHP'
+<?php
+
+// No encryptCookies — InstallCommand cannot patch this file
+return [];
+PHP
+    );
+}
+
+function assertPhpunitExtensionRegistered(string $phpunitPath): void
+{
+    $dom = new DOMDocument;
+    $dom->preserveWhiteSpace = false;
+    expect(@$dom->load($phpunitPath))->toBeTrue();
+    $xpath = new DOMXPath($dom);
+    $nodes = $xpath->query("//extensions/bootstrap[@class='".PestE2EPhpunitExtension::class."']");
+    expect($nodes !== false && $nodes->length > 0)->toBeTrue();
+}
+
+function assertPhpunitEnvVarsCommented(string $phpunitPath): void
+{
+    $dom = new DOMDocument;
+    $dom->preserveWhiteSpace = false;
+    expect(@$dom->load($phpunitPath))->toBeTrue();
+    $xpath = new DOMXPath($dom);
+    foreach (['DB_CONNECTION', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER'] as $var) {
+        $nodes = $xpath->query("//php/env[@name='{$var}']");
+        expect($nodes === false || $nodes->length === 0)->toBeTrue();
+    }
 }
 
 beforeEach(function (): void {
@@ -29,6 +83,7 @@ beforeEach(function (): void {
     $this->mockJs = new MockJsPackageManager;
     $this->mockJs->hasPlaywright = false;
     $this->mockJs->installReturnsSuccess = true;
+    $this->mockJs->availablePackageManagersOverride = ['npm'];
     $this->app->instance(JsPackageManager::class, $this->mockJs);
 
     $this->fakePublish = new FakePublishCommand;
@@ -85,14 +140,18 @@ it('fails when tests/Pest.php is missing', function (): void {
 it('updates Pest.php and publishes when --yes and Playwright not installed', function (): void {
     createPestPhp($this->tempDir);
     createInstallTestEnv($this->tempDir);
+    createBootstrapAppWithEncryptCookies($this->tempDir);
 
+    $output = new BufferedOutput;
     $exitCode = runInstall(
         args: ['--yes' => true],
-        argvFlags: ['--yes', '--no-interaction']
+        argvFlags: ['--yes', '--no-interaction'],
+        output: $output
     );
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
-        ->and($this->mockJs->installCallCount)->toBe(1);
+        ->and($this->mockJs->installCallCount)->toBe(1)
+        ->and($output->fetch())->toContain('CSRF exclusion for pest-e2e auth route added successfully');
 
     $tagSets = array_column($this->fakePublish->calls, 'tag');
     $tags = $tagSets ? array_merge(...$tagSets) : [];
@@ -103,11 +162,19 @@ it('updates Pest.php and publishes when --yes and Playwright not installed', fun
         ->and($tags)->toContain('pest-e2e-js-playwright');
 
     expect(file_get_contents($this->tempDir.'/tests/Pest.php'))->toContain('E2ETestCase');
+
+    assertPhpunitEnvVarsCommented($this->tempDir.'/phpunit.xml');
+    assertPhpunitExtensionRegistered($this->tempDir.'/phpunit.xml');
+
+    expect(file_get_contents($this->tempDir.'/bootstrap/app.php'))->toContain('pest-e2e/auth/login');
+    expect(file_exists($this->tempDir.'/.env.testing'))->toBeTrue();
+    expect(file_exists($this->tempDir.'/database/testing.sqlite'))->toBeTrue();
 });
 
-it('does not modify files or publish when --no', function (): void {
+it('registers Pest E2E PHPUnit extension when --no but phpunit.xml exists', function (): void {
     createPestPhp($this->tempDir);
-    $original = file_get_contents($this->tempDir.'/tests/Pest.php');
+    createInstallTestEnv($this->tempDir);
+    $originalPest = file_get_contents($this->tempDir.'/tests/Pest.php');
 
     $exitCode = runInstall(
         args: ['--no' => true],
@@ -117,7 +184,25 @@ it('does not modify files or publish when --no', function (): void {
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
         ->and($this->fakePublish->calls)->toBeEmpty()
         ->and($this->mockJs->installCallCount)->toBe(0)
-        ->and(file_get_contents($this->tempDir.'/tests/Pest.php'))->toBe($original);
+        ->and(file_get_contents($this->tempDir.'/tests/Pest.php'))->toBe($originalPest);
+
+    assertPhpunitExtensionRegistered($this->tempDir.'/phpunit.xml');
+});
+
+it('warns when CSRF exclusion cannot be applied', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    createBootstrapAppWithoutCsrfHook($this->tempDir);
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($output->fetch())->toContain('Could not add CSRF exclusion');
 });
 
 it('does not call installJsPackage when Playwright already installed', function (): void {
@@ -155,6 +240,19 @@ it('injects DatabaseMigrations for E2E Browser tests', function (): void {
         ->and($pest)->toContain('->use(DatabaseMigrations::class)');
 });
 
+it('adds use DatabaseMigrations when Pest.php lacks declare(strict_types) on first line', function (): void {
+    createPestPhp($this->tempDir, "<?php\n\n// boot\n");
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect(file_get_contents($this->tempDir.'/tests/Pest.php'))->toContain('use Illuminate\\Foundation\\Testing\\DatabaseMigrations;');
+});
+
 it('does not duplicate E2ETestCase when already present', function (): void {
     createPestPhp($this->tempDir, "<?php\n\ndeclare(strict_types=1);\n\npest()->extend(Tests\\E2ETestCase::class)->in('Browser');\n");
     createInstallTestEnv($this->tempDir);
@@ -169,10 +267,11 @@ it('does not duplicate E2ETestCase when already present', function (): void {
     expect($count)->toBe(1);
 });
 
-it('injects detected package manager into published E2ETestCase', function (): void {
+it('injects detected package manager into published E2ETestCase — yarn', function (): void {
     createPestPhp($this->tempDir);
     createInstallTestEnv($this->tempDir);
     $this->mockJs->hasPlaywright = true;
+    $this->mockJs->availablePackageManagersOverride = ['yarn', 'npm'];
     $this->mockJs->detectedLockfilesOverride = ['yarn' => 'yarn.lock'];
 
     runInstall(
@@ -180,14 +279,76 @@ it('injects detected package manager into published E2ETestCase', function (): v
         argvFlags: ['--yes', '--no-interaction']
     );
 
-    $e2eTestCase = file_get_contents($this->tempDir.'/tests/E2ETestCase.php');
-    expect($e2eTestCase)->toContain('$e2ePackageManager = \'yarn\'');
+    expect(file_get_contents($this->tempDir.'/tests/E2ETestCase.php'))->toContain('$e2ePackageManager = \'yarn\'');
+});
+
+it('injects pnpm when pnpm lockfile is detected', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->mockJs->availablePackageManagersOverride = ['pnpm', 'npm'];
+    $this->mockJs->detectedLockfilesOverride = ['pnpm' => 'pnpm-lock.yaml'];
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect(file_get_contents($this->tempDir.'/tests/E2ETestCase.php'))->toContain('$e2ePackageManager = \'pnpm\'');
+});
+
+it('injects bun when bun lockfile is detected', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->mockJs->availablePackageManagersOverride = ['bun', 'npm'];
+    $this->mockJs->detectedLockfilesOverride = ['bun' => 'bun.lockb'];
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect(file_get_contents($this->tempDir.'/tests/E2ETestCase.php'))->toContain('$e2ePackageManager = \'bun\'');
+});
+
+it('honors --package-manager for E2ETestCase stub over detection', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->mockJs->availablePackageManagersOverride = ['npm'];
+    $this->mockJs->detectedLockfilesOverride = [];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true, '--package-manager' => 'bun'],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+    expect(file_get_contents($this->tempDir.'/tests/E2ETestCase.php'))->toContain('$e2ePackageManager = \'bun\'');
+});
+
+it('fails when --package-manager is invalid', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--yes' => true, '--package-manager' => 'invalid-pm'],
+        argvFlags: ['--yes', '--no-interaction'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE)
+        ->and($output->fetch())->toContain('Invalid --package-manager');
 });
 
 it('injects npm when no lockfile detected', function (): void {
     createPestPhp($this->tempDir);
     createInstallTestEnv($this->tempDir);
     $this->mockJs->hasPlaywright = true;
+    $this->mockJs->availablePackageManagersOverride = ['npm'];
     $this->mockJs->detectedLockfilesOverride = [];
 
     runInstall(
@@ -195,6 +356,352 @@ it('injects npm when no lockfile detected', function (): void {
         argvFlags: ['--yes', '--no-interaction']
     );
 
-    $e2eTestCase = file_get_contents($this->tempDir.'/tests/E2ETestCase.php');
-    expect($e2eTestCase)->toContain('$e2ePackageManager = \'npm\'');
+    expect(file_get_contents($this->tempDir.'/tests/E2ETestCase.php'))->toContain('$e2ePackageManager = \'npm\'');
+});
+
+it('non-interactive install picks first registration order when multiple PMs lack lockfile match', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->mockJs->availablePackageManagersOverride = ['yarn', 'pnpm'];
+    $this->mockJs->detectedLockfilesOverride = [];
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect(file_get_contents($this->tempDir.'/tests/E2ETestCase.php'))->toContain('$e2ePackageManager = \'pnpm\'');
+});
+
+it('appends bootstrap into an existing empty extensions element', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php></php><extensions></extensions></phpunit>'
+    );
+
+    runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction']
+    );
+
+    assertPhpunitExtensionRegistered($this->tempDir.'/phpunit.xml');
+});
+
+it('fails publish base test case when vendor:publish fails', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->fakePublish->failTags = ['pest-e2e-test-case'];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails publish config when vendor:publish fails', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->fakePublish->failTags = ['pest-e2e-config'];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails publish browser tests when vendor:publish fails', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->fakePublish->failTags = ['pest-e2e-browser-tests'];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails publish playwright tests when vendor:publish fails', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->fakePublish->failTags = ['pest-e2e-playwright-tests'];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails publish js harness when vendor:publish fails', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->fakePublish->failTags = ['pest-e2e-js-harness'];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails install Playwright when npm install returns unsuccessful', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->installReturnsSuccess = false;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails after Playwright install when js-playwright publish fails', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->fakePublish->failTags = ['pest-e2e-js-playwright'];
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('warns Playwright is not installed when using --no', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($output->fetch())->toContain('@playwright/test');
+});
+
+it('prints harness publish hint when Playwright already installed and harness not published', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: [],
+        argvFlags: ['--no-interaction'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+    expect($output->fetch())->toContain('pest-e2e-js-harness');
+});
+
+it('runs with quiet output without throwing', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    $quietOut = new BufferedOutput(OutputInterface::VERBOSITY_QUIET);
+    $exitCode = runInstall(
+        args: ['--yes' => true, '--quiet' => true],
+        argvFlags: ['--yes', '--no-interaction'],
+        output: $quietOut
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+    expect($quietOut->fetch())->toBe('');
+});
+
+it('skips .env.testing content write when .env is missing but reports success', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    @unlink($this->tempDir.'/.env');
+    $this->mockJs->hasPlaywright = true;
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($output->fetch())->toContain('.env file not found');
+});
+
+it('fails configure phpunit when phpunit.xml is missing', function (): void {
+    createPestPhp($this->tempDir);
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails configure phpunit when xml is invalid', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/phpunit.xml', 'not valid <<<> xml');
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('fails creating testing database when database path is blocked by a file', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    rmdir($this->tempDir.'/database');
+    touch($this->tempDir.'/database');
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('reports phpunit already configured when env vars are already commented', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php><!-- <env name="DB_CONNECTION" value="sqlite"/> --></php></phpunit>'
+    );
+    $this->mockJs->hasPlaywright = true;
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($output->fetch())->toContain('phpunit.xml already configured');
+});
+
+it('idempotently skips CSRF patch when route is already excluded', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    createBootstrapAppWithEncryptCookies($this->tempDir);
+    $app = file_get_contents($this->tempDir.'/bootstrap/app.php');
+    file_put_contents(
+        $this->tempDir.'/bootstrap/app.php',
+        str_replace(
+            'encryptCookies(except: []);',
+            "encryptCookies(except: []);\n        \$middleware->validateCsrfTokens(except: ['/pest-e2e/auth/login']);",
+            $app
+        )
+    );
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+});
+
+it('fails addCsrfExclusion when bootstrap app.php is missing', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+});
+
+it('accepts --unattended like --yes for publish flags', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--unattended' => true],
+        argvFlags: ['--unattended', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+    $tagSets = array_column($this->fakePublish->calls, 'tag');
+    $tags = $tagSets ? array_merge(...$tagSets) : [];
+    expect($tags)->toContain('pest-e2e-config');
+});
+
+it('updatePestConfig returns FAILURE when Pest.php is missing', function (): void {
+    createPestPhp($this->tempDir);
+    unlink($this->tempDir.'/tests/Pest.php');
+
+    $command = app(InstallCommand::class);
+    $method = new ReflectionMethod(InstallCommand::class, 'updatePestConfig');
+    $method->setAccessible(true);
+
+    expect($method->invoke($command))->toBe(InstallCommand::FAILURE);
+});
+
+it('does not insert duplicate E2E phpunit comment when already present', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php><!-- E2E: Omit manual --><env name="APP_ENV" value="testing"/></php></phpunit>'
+    );
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--configure-phpunit' => true, '--force' => true],
+        argvFlags: ['--configure-phpunit', '--force', '--no-interaction']
+    );
+
+    expect(substr_count(file_get_contents($this->tempDir.'/phpunit.xml'), 'E2E: Omit'))->toBe(1);
+});
+
+it('reuses cached Pest.php content in getPestPhp after first read', function (): void {
+    createPestPhp($this->tempDir, "<?php\necho 'v1';\n");
+    $command = app(InstallCommand::class);
+
+    $g = new ReflectionMethod(InstallCommand::class, 'getPestPhp');
+    $g->setAccessible(true);
+    expect($g->invoke($command))->toContain('v1');
+
+    file_put_contents($this->tempDir.'/tests/Pest.php', "<?php\necho 'v2';\n");
+    expect($g->invoke($command))->toContain('v1');
 });

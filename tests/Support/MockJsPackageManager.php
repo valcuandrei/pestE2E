@@ -22,11 +22,27 @@ final class MockJsPackageManager extends JsPackageManager
     /** @var array<string, string> */
     public array $detectedLockfilesOverride = [];
 
+    /**
+     * When set, {@see getAvailablePackageManagers()} returns this list (deterministic tests).
+     *
+     * @var list<string>|null
+     */
+    public ?array $availablePackageManagersOverride = null;
+
     public function detectedLockfiles(): array
     {
         return $this->detectedLockfilesOverride !== []
             ? $this->detectedLockfilesOverride
             : parent::detectedLockfiles();
+    }
+
+    public function getAvailablePackageManagers(): array
+    {
+        if ($this->availablePackageManagersOverride !== null) {
+            return $this->availablePackageManagersOverride;
+        }
+
+        return parent::getAvailablePackageManagers();
     }
 
     public function hasJsAnyDependency(string $dependency): bool

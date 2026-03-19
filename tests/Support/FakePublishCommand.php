@@ -16,6 +16,13 @@ final class FakePublishCommand extends Command
     /** @var array<int, array{tag: array<string>, force: bool}> */
     public array $calls = [];
 
+    /**
+     * If any published tag is in this list, handle() returns FAILURE (after recording the call).
+     *
+     * @var list<string>
+     */
+    public array $failTags = [];
+
     public function handle(): int
     {
         $tags = (array) $this->option('tag');
@@ -23,6 +30,12 @@ final class FakePublishCommand extends Command
             'tag' => $tags,
             'force' => (bool) $this->option('force'),
         ];
+
+        foreach ($tags as $tag) {
+            if (in_array($tag, $this->failTags, true)) {
+                return self::FAILURE;
+            }
+        }
 
         if (in_array('pest-e2e-test-case', $tags, true)) {
             $this->publishE2ETestCaseStub();

@@ -6,6 +6,7 @@ namespace ValcuAndrei\PestE2E\Commands;
 
 use Illuminate\Console\Command;
 use Symfony\Component\Process\Process;
+use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 
 final class InstallCommand extends Command
@@ -27,6 +28,7 @@ final class InstallCommand extends Command
         .' {--setup-testing-database : Create database/testing.sqlite for SQLite tests}'
         .' {--configure-phpunit : Comment out DB/cache env in phpunit.xml so .env.testing controls them}'
         .' {--install-playwright : Install Playwright}'
+        .' {--package-manager= : Package manager written into E2ETestCase (npm, yarn, pnpm, bun); skips detection}'
         .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion --setup-env-testing --setup-testing-database --configure-phpunit)}'
         .' {--no : Answer no to all questions (can be overridden by the individual options)}'
         .' {--unattended : Answer yes to all questions (shortcut for --yes)}';
@@ -53,6 +55,20 @@ final class InstallCommand extends Command
             $this->error('Pest config file not found. Please run "php artisan pest:init" to create it.');
 
             return self::FAILURE;
+        }
+
+        $packageManagerOption = $this->option('package-manager');
+        if (is_string($packageManagerOption) && $packageManagerOption !== '') {
+            $allowed = $this->jsPackageManager->packageManagerKeysInRegistrationOrder();
+            if (! in_array($packageManagerOption, $allowed, true)) {
+                $this->error(sprintf(
+                    'Invalid --package-manager "%s". Use one of: %s.',
+                    $packageManagerOption,
+                    implode(', ', $allowed)
+                ));
+
+                return self::FAILURE;
+            }
         }
 
         $force = (bool) $this->option('force');
@@ -178,6 +194,14 @@ final class InstallCommand extends Command
             $this->info('phpunit.xml already configured for .env.testing.');
         }
 
+        if ($this->phpunitExtensionIsRegistered()) {
+            if (! $quiet) {
+                $this->info('Pest E2E PHPUnit extension already registered.');
+            }
+        } elseif ($this->registerPhpunitExtension() === self::SUCCESS && ! $quiet) {
+            $this->info('Pest E2E PHPUnit extension registered.');
+        }
+
         if ($publishBrowserTests) {
             if ($this->publishBrowserTests($force) === self::SUCCESS) {
                 if (! $quiet) {
@@ -195,8 +219,16 @@ final class InstallCommand extends Command
         }
 
         if (($hasPlaywrightInstalled || $installPlaywright) && $publishPlaywrightTests) {
-            if ($this->publishPlaywrightTests($force) === self::SUCCESS && ! $quiet) {
-                $this->info('Pest E2E Playwright tests published successfully.');
+            if ($this->publishPlaywrightTests($force) === self::SUCCESS) {
+                if (! $quiet) {
+                    $this->info('Pest E2E Playwright tests published successfully.');
+                }
+            } else {
+                if (! $quiet) {
+                    $this->error('Failed to publish Pest E2E Playwright tests');
+                }
+
+                return self::FAILURE;
             }
         } elseif (! $quiet && $this->playwrightTestsExist()) {
             $this->info('Pest E2E Playwright tests already published.');
@@ -379,26 +411,77 @@ final class InstallCommand extends Command
             return;
         }
 
-        $detected = $this->detectPackageManager();
+        $detected = $this->resolvePackageManagerKeyForE2EStub();
         $content = str_replace('{{PACKAGE_MANAGER}}', $detected, $content);
 
         file_put_contents($path, $content);
     }
 
     /**
-     * Detect the project's package manager from lockfiles.
+     * Resolve package manager for E2ETestCase stub: prefer installed binaries
+     * ({@see JsPackageManager::getAvailablePackageManagers()}), prompt when
+     * several exist, else fall back to lockfile-only detection.
      */
-    private function detectPackageManager(): string
+    private function resolvePackageManagerKeyForE2EStub(): string
     {
-        $lockfiles = $this->jsPackageManager->detectedLockfiles();
+        $forced = $this->option('package-manager');
+        if (is_string($forced) && $forced !== '') {
+            return $forced;
+        }
 
-        foreach (['pnpm', 'yarn', 'bun', 'npm'] as $pm) {
-            if (isset($lockfiles[$pm])) {
-                return $pm;
+        $available = $this->jsPackageManager->getAvailablePackageManagers();
+
+        if ($available === []) {
+            return $this->jsPackageManager->defaultPackageManagerKeyFromLockfiles();
+        }
+
+        $ordered = $this->orderPackageManagerKeysByRegistration($available);
+
+        if (count($ordered) === 1) {
+            return $ordered[0];
+        }
+
+        $lockfileChoice = $this->jsPackageManager->defaultPackageManagerKeyFromLockfiles();
+
+        if ($this->input->isInteractive()) {
+            $default = in_array($lockfileChoice, $ordered, true) ? $lockfileChoice : $ordered[0];
+
+            /** @var string */
+            return $this->choice(
+                'Which package manager should Pest E2E use for JS / Playwright commands?',
+                $ordered,
+                $default
+            );
+        }
+
+        if (in_array($lockfileChoice, $ordered, true)) {
+            return $lockfileChoice;
+        }
+
+        return $ordered[0];
+    }
+
+    /**
+     * @param  array<string>  $keys
+     * @return list<string>
+     */
+    private function orderPackageManagerKeysByRegistration(array $keys): array
+    {
+        $want = array_flip($keys);
+        $ordered = [];
+        foreach ($this->jsPackageManager->packageManagerKeysInRegistrationOrder() as $key) {
+            if (isset($want[$key])) {
+                $ordered[] = $key;
             }
         }
 
-        return 'npm';
+        foreach ($keys as $key) {
+            if (! in_array($key, $ordered, true)) {
+                $ordered[] = $key;
+            }
+        }
+
+        return $ordered;
     }
 
     /**
@@ -553,6 +636,30 @@ final class InstallCommand extends Command
     }
 
     /**
+     * Load phpunit.xml as DOMDocument.
+     */
+    private function loadPhpunitXml(string $path): ?\DOMDocument
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = true;
+
+        if (@$dom->load($path) === false) {
+            return null;
+        }
+
+        return $dom;
+    }
+
+    /**
+     * Save DOMDocument to phpunit.xml.
+     */
+    private function savePhpunitXml(\DOMDocument $dom, string $path): bool
+    {
+        return $dom->save($path) !== false;
+    }
+
+    /**
      * Check if phpunit.xml has DB/cache env vars commented out (so .env.testing controls them).
      */
     private function phpunitIsConfiguredForEnvTesting(): bool
@@ -562,28 +669,84 @@ final class InstallCommand extends Command
             return false;
         }
 
-        $content = file_get_contents($path);
-        if ($content === false) {
+        $dom = $this->loadPhpunitXml($path);
+        if (! $dom instanceof \DOMDocument) {
             return false;
         }
 
-        // Remove XML comments to check for uncommented env vars
-        $withoutComments = preg_replace('/<!--.*?-->/s', '', $content) ?? $content;
+        $xpath = new \DOMXPath($dom);
+        $varsToCheck = ['DB_CONNECTION', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER'];
 
-        $uncommentedPatterns = [
-            '/<\s*env\s+name="DB_CONNECTION"/',
-            '/<\s*env\s+name="DB_DATABASE"/',
-            '/<\s*env\s+name="CACHE_STORE"/',
-            '/<\s*env\s+name="SESSION_DRIVER"/',
-        ];
-
-        foreach ($uncommentedPatterns as $pattern) {
-            if (preg_match($pattern, $withoutComments) === 1) {
+        foreach ($varsToCheck as $var) {
+            $nodes = $xpath->query("//php/env[@name='{$var}']");
+            if ($nodes !== false && $nodes->length > 0) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Check if the Pest E2E PHPUnit extension is registered in phpunit.xml.
+     */
+    private function phpunitExtensionIsRegistered(): bool
+    {
+        $path = base_path('phpunit.xml');
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $dom = $this->loadPhpunitXml($path);
+        if (! $dom instanceof \DOMDocument) {
+            return false;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $nodes = $xpath->query("//extensions/bootstrap[@class='ValcuAndrei\\PestE2E\\PHPUnit\\PestE2EPhpunitExtension']");
+
+        return $nodes !== false && $nodes->length > 0;
+    }
+
+    /**
+     * Register the Pest E2E PHPUnit extension in phpunit.xml.
+     */
+    private function registerPhpunitExtension(): int
+    {
+        $path = base_path('phpunit.xml');
+        if (! is_file($path)) {
+            return self::SUCCESS;
+        }
+
+        if ($this->phpunitExtensionIsRegistered()) {
+            return self::SUCCESS;
+        }
+
+        $dom = $this->loadPhpunitXml($path);
+        if (! $dom instanceof \DOMDocument) {
+            return self::FAILURE;
+        }
+
+        $root = $dom->documentElement;
+        if (! $root instanceof \DOMElement) {
+            return self::FAILURE;
+        }
+
+        $extensions = $dom->getElementsByTagName('extensions')->item(0);
+
+        if ($extensions !== null) {
+            $bootstrap = $dom->createElement('bootstrap');
+            $bootstrap->setAttribute('class', PestE2EPhpunitExtension::class);
+            $extensions->appendChild($bootstrap);
+        } else {
+            $extensions = $dom->createElement('extensions');
+            $bootstrap = $dom->createElement('bootstrap');
+            $bootstrap->setAttribute('class', PestE2EPhpunitExtension::class);
+            $extensions->appendChild($bootstrap);
+            $root->appendChild($extensions);
+        }
+
+        return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
     }
 
     /**
@@ -875,34 +1038,52 @@ final class InstallCommand extends Command
             return self::SUCCESS;
         }
 
-        $content = file_get_contents($path);
-        if ($content === false) {
+        $dom = $this->loadPhpunitXml($path);
+        if (! $dom instanceof \DOMDocument) {
             return self::FAILURE;
         }
 
+        $xpath = new \DOMXPath($dom);
         $varsToComment = ['DB_CONNECTION', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER'];
 
         foreach ($varsToComment as $var) {
-            $pattern = '/(\s*)<env\s+name="'.$var.'"\s+value="([^"]*)"\s*\/?>\s*\n/';
-            $content = preg_replace_callback(
-                $pattern,
-                fn (array $m): string => $m[1].'<!-- <env name="'.$var.'" value="'.$m[2].'"/> -->'."\n",
-                $content,
-                1
-            ) ?? $content;
+            $nodes = $xpath->query("//php/env[@name='{$var}']");
+            if ($nodes === false) {
+                continue;
+            }
+            foreach ($nodes as $env) {
+                if (! $env instanceof \DOMElement) {
+                    continue;
+                }
+                $xml = $dom->saveXML($env);
+                if ($xml === false) {
+                    continue;
+                }
+                $comment = $dom->createComment(' '.trim($xml).' ');
+                $parent = $env->parentNode;
+                if ($parent instanceof \DOMNode) {
+                    $parent->replaceChild($comment, $env);
+                }
+            }
         }
 
-        if (! str_contains($content, 'E2E: Omit so .env.testing')) {
-            $comment = "        <!-- E2E: Omit DB/cache env so .env.testing controls them (required for auth ticket sharing) -->\n";
-            $content = preg_replace(
-                '/(<php>\s*\n)/',
-                '$1'.$comment,
-                $content,
-                1
-            ) ?? $content;
+        $phpNodes = $dom->getElementsByTagName('php');
+        $php = $phpNodes->item(0);
+        if ($php !== null) {
+            $hasE2EComment = false;
+            foreach ($php->childNodes as $child) {
+                if ($child instanceof \DOMComment && str_contains($child->data, 'E2E: Omit')) {
+                    $hasE2EComment = true;
+                    break;
+                }
+            }
+            if (! $hasE2EComment) {
+                $e2eComment = $dom->createComment(' E2E: Omit DB/cache env so .env.testing controls them (required for auth ticket sharing) ');
+                $php->insertBefore($e2eComment, $php->firstChild);
+            }
         }
 
-        return file_put_contents($path, $content) !== false ? self::SUCCESS : self::FAILURE;
+        return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
     }
 
     /**

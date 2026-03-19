@@ -553,6 +553,55 @@ class JsPackageManager
     }
 
     /**
+     * Package manager keys in registration / priority order (pnpm, yarn, bun, npm, …).
+     *
+     * @return list<string>
+     */
+    public function packageManagerKeysInRegistrationOrder(): array
+    {
+        /** @var list<string> */
+        return array_keys($this->packageManagers);
+    }
+
+    /**
+     * Get the available package managers.
+     *
+     * @return array<string>
+     */
+    public function getAvailablePackageManagers(): array
+    {
+        $pms = $this->getPackageManager();
+
+        if (! $pms) {
+            return [];
+        }
+
+        return array_keys(array_filter(
+            array: $pms,
+            callback: fn (array $pm): bool => $pm['available'] === true,
+        ));
+    }
+
+    /**
+     * Package manager key for install-time stubs (e.g. E2ETestCase), from lockfiles only.
+     *
+     * Uses registration order in {@see $packageManagers} when multiple lockfiles exist.
+     * Returns "npm" when no supported lockfile is present.
+     */
+    public function defaultPackageManagerKeyFromLockfiles(): string
+    {
+        $lockfiles = $this->detectedLockfiles();
+
+        foreach (array_keys($this->packageManagers) as $key) {
+            if (isset($lockfiles[$key])) {
+                return $key;
+            }
+        }
+
+        return 'npm';
+    }
+
+    /**
      * Check if a package manager is available.
      *
      * @param  string  $pmKey  The package manager key.
