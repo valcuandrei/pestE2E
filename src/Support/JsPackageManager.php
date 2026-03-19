@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\Support;
 
 use RuntimeException;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 class JsPackageManager
@@ -527,11 +528,7 @@ class JsPackageManager
      */
     private function binaryExists(string $binary): bool
     {
-        $cmd = PHP_OS_FAMILY === 'Windows' ? ['where', $binary] : ['sh', '-c', 'command -v '.escapeshellarg($binary)];
-        $process = new Process($cmd);
-        $process->run();
-
-        return $process->isSuccessful();
+        return (new ExecutableFinder)->find($binary) !== null;
     }
 
     /**
