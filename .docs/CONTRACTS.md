@@ -10,13 +10,25 @@ Injected into every Node process:
 
 ## Suite execution contract
 
-The PHP `PlaywrightWorker` drives Playwright directly via its CLI.
+The package is **runner-agnostic**. Two contracts define the bridge:
+
+- **`JsWorkerContract`** — runs the JS test process, returns `ProcessResultDTO`
+- **`JsonParserContract`** — parses runner output into `JsonReportDTO` (pest-e2e.v1 schema)
+
+Implement these contracts to use a different runner (Cypress, Puppeteer, etc.). Bindings are configurable via `config('pest-e2e.bindings')`:
+
+```php
+'bindings' => [
+    \ValcuAndrei\PestE2E\Contracts\JsWorkerContract::class => \ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker::class,
+    \ValcuAndrei\PestE2E\Contracts\JsonParserContract::class => \ValcuAndrei\PestE2E\Parsers\PlaywrightParser::class,
+],
+```
+
+### Default: Playwright
+
+`PlaywrightWorker` (implements `JsWorkerContract`) drives Playwright via its CLI.
 Test filtering (`--grep`), headed mode (`--headed`), and debug mode (`--debug`) are passed as CLI arguments.
-
-### Playwright integration
-
-The PHP `PlaywrightWorker` drives Playwright directly via its CLI and reads the JSON report output.
-Report conversion from Playwright's native format to `pest-e2e.v1` is handled by `PlaywrightParser` on the PHP side.
+`PlaywrightParser` (implements `JsonParserContract`) reads the JSON report from stdout and maps it to pest-e2e.v1.
 
 ## Auth bridge contract
 - JS receives `params.auth` payload

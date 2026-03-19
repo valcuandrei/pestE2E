@@ -5,6 +5,12 @@ namespace Tests;
 abstract class E2ETestCase extends TestCase
 {
     /**
+     * Default package manager for E2E runs (npm, yarn, pnpm, bun).
+     * Override via --run-using= or config('pest-e2e.package_manager').
+     */
+    protected static string $e2ePackageManager = '{{PACKAGE_MANAGER}}';
+
+    /**
      * Whether the e2e targets have been registered.
      */
     private static bool $e2eTargetsRegistered = false;
@@ -16,6 +22,10 @@ abstract class E2ETestCase extends TestCase
     {
         $this->markAsE2ETest();
         parent::setUp();
+
+        if (config('pest-e2e.package_manager') === null) {
+            config(['pest-e2e.package_manager' => self::$e2ePackageManager]);
+        }
 
         if (self::$e2eTargetsRegistered) {
             return;

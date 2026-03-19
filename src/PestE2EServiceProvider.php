@@ -10,11 +10,8 @@ use ValcuAndrei\PestE2E\Commands\InstallCommand;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketIssuerContract;
 use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
-use ValcuAndrei\PestE2E\Contracts\JsonParserContract;
-use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
-use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Support\CacheAuthTicketStore;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
@@ -22,7 +19,6 @@ use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Support\LaravelAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\RandomRunIdGenerator;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
-use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
 
 final class PestE2EServiceProvider extends ServiceProvider
 {
@@ -39,8 +35,15 @@ final class PestE2EServiceProvider extends ServiceProvider
         $this->app->bind(AuthTicketIssuerContract::class, LaravelAuthTicketIssuer::class);
         $this->app->bind(ParamsFileWriterContract::class, TempParamsFileWriter::class);
         $this->app->bind(E2EAuthActionContract::class, DefaultE2EAuthAction::class);
-        $this->app->bind(JsWorkerContract::class, PlaywrightWorker::class);
-        $this->app->bind(JsonParserContract::class, PlaywrightParser::class);
+
+        $bindings = config('pest-e2e.bindings', []);
+        $bindings = is_array($bindings) ? $bindings : [];
+
+        foreach ($bindings as $contract => $implementation) {
+            if (is_string($contract) && is_string($implementation)) {
+                $this->app->bind($contract, $implementation);
+            }
+        }
     }
 
     public function boot(): void

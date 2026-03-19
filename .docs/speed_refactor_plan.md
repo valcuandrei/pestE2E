@@ -52,13 +52,13 @@ Core idea:
 
 PHP (Orchestrator)
 ↓
-JsRunnerContract
+JsWorkerContract
 ↓
-PlaywrightRunner
+PlaywrightWorker
 
 ```
 
-Two implementations:
+Two implementations (planned):
 
 ```
 
@@ -108,72 +108,54 @@ Warm run ≤ 2s
 
 ---
 
-# [x] Phase 1 — Introduce JsRunnerContract
+# [x] Phase 1 — Introduce JsWorkerContract
 
 ## Goal
 
 Create a runner abstraction without changing behavior.
 
-## Create
+## Actual Implementation
+
+The package uses `JsWorkerContract` (not JsRunnerContract) with a simpler interface:
 
 ```
-
-packages/pestE2E/src/Contracts/JsRunnerContract.php
-
+packages/pestE2E/src/Contracts/JsWorkerContract.php
 ```
 
 ### Interface
 
 ```php
-interface JsRunnerContract
+interface JsWorkerContract
 {
-    public function start(): void;
-
-    public function isRunning(): bool;
-
-    public function run(JsRunRequestDTO $request): JsRunResultDTO;
-
-    public function stop(): void;
-
-    public function capabilities(): JsRunnerCapabilitiesDTO;
+    public function run(ProcessPlanDTO $plan): ProcessResultDTO;
 }
 ```
 
 ### DTOs
 
-Create:
+The implementation uses existing DTOs:
 
-```
-packages/pestE2E/src/DTO/JsRunRequestDTO.php
-packages/pestE2E/src/DTO/JsRunResultDTO.php
-packages/pestE2E/src/DTO/JsRunnerCapabilitiesDTO.php
-```
+* `ProcessPlanDTO` — command, options, test filter, headed/debug flags
+* `ProcessResultDTO` — exit code, stdout, stderr, duration
 
-DTOs must remain **runner-agnostic**.
-
-They must NOT contain:
-
-* wsEndpoint
-* chromium
-* browserServer
-* Playwright objects
+DTOs remain **runner-agnostic**.
 
 ---
 
 ## Implement Cold Runner
 
 ```
-packages/pestE2E/src/Runners/Js/PlaywrightColdRunner.php
+packages/pestE2E/src/Workers/Playwright/PlaywrightWorker.php
 ```
 
 Responsibilities:
 
-* spawn Node runner
+* spawn Node runner (via `playwright test` CLI)
 * pass environment variables
 * capture stdout / stderr
-* return canonical JSON report
+* return canonical JSON report (via PlaywrightParser)
 
-Bind this runner to the contract by default.
+Bound to `JsWorkerContract` by default.
 
 ---
 
@@ -380,7 +362,7 @@ Note: warm mode correctness is validated and fallback is in place, but benchmark
 # Implementation Order
 
 1. Phase 0 — Baseline
-2. Phase 1 — JsRunnerContract
+2. Phase 1 — JsWorkerContract
 3. Phase 2 — Playwright startup optimization
 4. Phase 3 — Laravel server reuse
 5. Phase 4 — Warm runner

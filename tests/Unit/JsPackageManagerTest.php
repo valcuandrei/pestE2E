@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 
 beforeEach(function (): void {
+    CliOptions::$packageManager = null;
     $this->tempDir = sys_get_temp_dir().'/pest-e2e-js-'.uniqid((string) mt_rand(), true);
     mkdir($this->tempDir, 0755, true);
     $this->app->setBasePath($this->tempDir);
@@ -24,11 +26,22 @@ afterEach(function (): void {
     }
 });
 
-function withFakeBin(string $tempDir, callable $fn): void
+function withFakeBin(string $tempDir, callable $fn, array $binaries = []): void
 {
     $fakeBin = $tempDir.'/fakebin';
     if (! is_dir($fakeBin)) {
         mkdir($fakeBin, 0755, true);
+    }
+
+    foreach ($binaries as $name) {
+        $path = $fakeBin.DIRECTORY_SEPARATOR.$name;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $path .= '.cmd';
+            file_put_contents($path, "@echo off\n");
+        } else {
+            file_put_contents($path, "#!/bin/sh\nexit 0\n");
+            chmod($path, 0755);
+        }
     }
 
     $savedPath = getenv('PATH');
@@ -181,3 +194,23 @@ it('activePackageManager returns false when all package managers unavailable', f
         }
     });
 });
+
+it('activePackageManager respects CliOptions override when binary exists', function (): void {
+    CliOptions::$packageManager = 'npm';
+
+    withFakeBin($this->tempDir, function () {
+        $result = $this->manager->activePackageManager();
+
+        expect($result)->not->toBeFalse()
+            ->and($result)->toHaveKey('name')
+            ->and($result['name'])->toBe('npm');
+    }, ['npm']);
+});
+
+it('activePackageManager throws when override requested but binary missing', function (): void {
+    CliOptions::$packageManager = 'yarn';
+
+    withFakeBin($this->tempDir, function () {
+        $this->manager->activePackageManager();
+    });
+})->throws(RuntimeException::class, "Package manager 'yarn' requested but not available");

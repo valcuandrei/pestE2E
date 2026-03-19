@@ -355,7 +355,50 @@ final class InstallCommand extends Command
      */
     private function publishBaseTestCase(bool $force = false): int
     {
-        return $this->publish(['pest-e2e-test-case'], $force);
+        $result = $this->publish(['pest-e2e-test-case'], $force);
+
+        if ($result === self::SUCCESS) {
+            $this->injectPackageManagerIntoE2ETestCase();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Inject the detected package manager into the published E2ETestCase.
+     */
+    private function injectPackageManagerIntoE2ETestCase(): void
+    {
+        $path = base_path('tests/E2ETestCase.php');
+        if (! is_file($path)) {
+            return;
+        }
+
+        $content = file_get_contents($path);
+        if ($content === false) {
+            return;
+        }
+
+        $detected = $this->detectPackageManager();
+        $content = str_replace('{{PACKAGE_MANAGER}}', $detected, $content);
+
+        file_put_contents($path, $content);
+    }
+
+    /**
+     * Detect the project's package manager from lockfiles.
+     */
+    private function detectPackageManager(): string
+    {
+        $lockfiles = $this->jsPackageManager->detectedLockfiles();
+
+        foreach (['pnpm', 'yarn', 'bun', 'npm'] as $pm) {
+            if (isset($lockfiles[$pm])) {
+                return $pm;
+            }
+        }
+
+        return 'npm';
     }
 
     /**

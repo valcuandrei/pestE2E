@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Support;
 
+use RuntimeException;
 use Symfony\Component\Process\Process;
 
 class JsPackageManager
@@ -437,6 +438,67 @@ class JsPackageManager
      * @return array<string, mixed>|false
      */
     public function activePackageManager(): array|false
+    {
+        $override = $this->resolvePackageManagerOverride();
+        if ($override !== null) {
+            return $this->resolveForcedPackageManager($override);
+        }
+
+        return $this->resolveAutoDetectedPackageManager();
+    }
+
+    /**
+     * Resolve the package manager override from CLI or config.
+     */
+    private function resolvePackageManagerOverride(): ?string
+    {
+        if (CliOptions::$packageManager !== null && CliOptions::$packageManager !== '') {
+            return CliOptions::$packageManager;
+        }
+
+        if (function_exists('config')) {
+            $config = config('pest-e2e.package_manager');
+            if (is_string($config) && $config !== '') {
+                return $config;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve the forced package manager.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException
+     */
+    private function resolveForcedPackageManager(string $pmKey): array
+    {
+        $this->validatePackageManager($pmKey);
+
+        if (! $this->isPackageManagerAvailable($pmKey)) {
+            throw new RuntimeException(
+                "Package manager '{$pmKey}' requested but not available. Install it or use a different --run-using value."
+            );
+        }
+
+        $pms = $this->getPackageManager();
+        if ($pms === false || ! isset($pms[$pmKey])) {
+            throw new RuntimeException(
+                "Package manager '{$pmKey}' requested but could not be resolved."
+            );
+        }
+
+        return $pms[$pmKey];
+    }
+
+    /**
+     * Resolve the auto-detected package manager.
+     *
+     * @return array<string, mixed>|false
+     */
+    private function resolveAutoDetectedPackageManager(): array|false
     {
         $pms = $this->getPackageManager();
         if (! $pms) {

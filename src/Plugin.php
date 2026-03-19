@@ -47,7 +47,7 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
     {
         CliOptions::fromArguments($arguments);
 
-        return array_values(array_diff($arguments, CliOptions::optionKeys()));
+        return CliOptions::filterArguments($arguments);
     }
 
     /**

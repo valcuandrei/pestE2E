@@ -168,3 +168,33 @@ it('does not duplicate E2ETestCase when already present', function (): void {
     $count = substr_count(file_get_contents($this->tempDir.'/tests/Pest.php'), 'E2ETestCase::class');
     expect($count)->toBe(1);
 });
+
+it('injects detected package manager into published E2ETestCase', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->mockJs->detectedLockfilesOverride = ['yarn' => 'yarn.lock'];
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $e2eTestCase = file_get_contents($this->tempDir.'/tests/E2ETestCase.php');
+    expect($e2eTestCase)->toContain('$e2ePackageManager = \'yarn\'');
+});
+
+it('injects npm when no lockfile detected', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+    $this->mockJs->detectedLockfilesOverride = [];
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $e2eTestCase = file_get_contents($this->tempDir.'/tests/E2ETestCase.php');
+    expect($e2eTestCase)->toContain('$e2ePackageManager = \'npm\'');
+});

@@ -40,11 +40,12 @@ If the configured runner does not support filtering, `only()`/`runTest()` throws
 CLI flags:
 - `--browse` (alias: `--headed`)
 - `--debug`
+- `--run-using=npm|yarn|pnpm|bun` — use a specific package manager for E2E runs (overrides config and E2ETestCase default)
 
 ## Authentication
 
 When using Laravel, tests may authenticate E2E runs via
-`actingAs()` or personas.
+`actingAs()` or `loginAs()` (alias) or personas.
 
 Authentication state is transferred to JS using a
 one-time auth ticket and a testing-only login endpoint.
@@ -64,5 +65,6 @@ The JS runner should POST the ticket to the configured auth route:
 
 ## Report handling
 
-Reports are handled internally by `PlaywrightParser` on the PHP side.
-The JSON report path is managed automatically by `PlaywrightWorker`.
+Reports are parsed via `JsonParserContract` (default: `PlaywrightParser`).
+The JS runner emits JSON to stdout; the PHP side parses it in memory — no disk storage.
+Swap the parser by rebinding `JsonParserContract` in `config('pest-e2e.bindings')`.

@@ -100,7 +100,7 @@ php artisan pest-e2e:install --unattended
 
 | Option | Description |
 |--------|-------------|
-| `--yes` | Answer yes to all questions (includes setup-env-testing, setup-testing-database, configure-phpunit) |
+| `--yes` | Answer yes to all questions (performs full setup: update-pest, publish-config, publish-base-test-case, publish-js-harness, publish-js-playwright, add-csrf-exclusion, setup-env-testing, setup-testing-database, configure-phpunit, install-playwright) |
 | `--no` | Answer no to all questions |
 | `--force` | Overwrite existing files when publishing |
 | `--update-pest` | Update Pest config to include E2ETestCase |
@@ -211,7 +211,7 @@ test('that a user can update their profile', function () {
     $user = User::factory()->create();
 
     e2e('frontend')
-        ->actingAs($user)
+        ->actingAs($user)  // or ->loginAs($user)
         ->withParams([
             'name' => 'Test User',
             'email' => 'test@example.com',
@@ -313,10 +313,12 @@ sail artisan test
 ```bash
 php artisan test --browse
 php artisan test --debug
+php artisan test --run-using=yarn
 ```
 
 * `--browse` / `--headed` → runs browser in headed mode
 * `--debug` → enables debug mode and implies headed mode
+* `--run-using=npm|yarn|pnpm|bun` → use a specific package manager for E2E runs (default is set in `E2ETestCase::$e2ePackageManager` during install)
 
 ## Timing Instrumentation
 
@@ -379,19 +381,26 @@ Security:
 
 # Reports
 
-Reports are written to:
+The package does **not** store JSON reports on disk. Playwright emits its JSON report to stdout; the PHP side parses it in memory and maps it to the canonical `pest-e2e.v1` schema.
 
-```
-storage/framework/testing/pest-e2e/{runId}
-```
+---
 
-Configurable via:
+# Configuration
 
-```php
-config('pest-e2e.reports.dir');
-```
+Key config keys in `config/pest-e2e.php`:
 
-Schema: `pest-e2e.v1`
+| Key | Description |
+|-----|-------------|
+| `auth.route` | Auth endpoint path (default: `/pest-e2e/auth/login`) |
+| `auth.route_enabled` | Enable auth route (default: `false`, set via `PEST_E2E_AUTH_ROUTE_ENABLED`) |
+| `auth.ttl_seconds` | Auth ticket TTL (default: 60) |
+| `auth.header.name` / `auth.header.value` | Header required for auth requests (default: `X-Pest-E2E: 1`) |
+| `server.driver` | Server runner: `artisan` or `php_builtin` (default: `php_builtin`) |
+| `timing.enabled` | Enable timing instrumentation (default: `false`, set via `PEST_E2E_TIMING`) |
+| `js_runner.driver` | JS runner (default: `playwright`) |
+| `js_runner.mode` | Runner mode: `cold` or `warm` (default: `cold`) |
+| `package_manager` | Package manager for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` (default: set in E2ETestCase during install, overridable via `--run-using`) |
+| `bindings` | Contract-to-implementation map for swapping the JS runner. Keys: `JsWorkerContract::class`, `JsonParserContract::class`. Default: Playwright. Override to use Cypress, Puppeteer, etc. |
 
 ---
 

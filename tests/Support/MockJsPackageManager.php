@@ -19,6 +19,16 @@ final class MockJsPackageManager extends JsPackageManager
 
     public int $installCallCount = 0;
 
+    /** @var array<string, string> */
+    public array $detectedLockfilesOverride = [];
+
+    public function detectedLockfiles(): array
+    {
+        return $this->detectedLockfilesOverride !== []
+            ? $this->detectedLockfilesOverride
+            : parent::detectedLockfiles();
+    }
+
     public function hasJsAnyDependency(string $dependency): bool
     {
         return $this->hasPlaywright && $dependency === '@playwright/test';
