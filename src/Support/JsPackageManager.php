@@ -527,7 +527,7 @@ class JsPackageManager
      */
     private function binaryExists(string $binary): bool
     {
-        $cmd = PHP_OS_FAMILY === 'Windows' ? ['where', $binary] : ['sh', '-lc', 'command -v '.escapeshellarg($binary)];
+        $cmd = PHP_OS_FAMILY === 'Windows' ? ['where', $binary] : ['sh', '-c', 'command -v '.escapeshellarg($binary)];
         $process = new Process($cmd);
         $process->run();
 
