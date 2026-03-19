@@ -24,6 +24,9 @@ e2e()->target('frontend', fn ($p) => $p
 - `run()` — run suite, fail on JS failures
 - `only(string $pattern)` — run a subset when the runner supports filtering (runner-specific)
 - `runTest(string $name)` — convenience alias for single-test execution
+
+**Parallel runs:** Pest `--parallel` (and similar) are **not supported** for tests that invoke `run()`. Execute E2E tests sequentially in a single process.
+
 ### Filtering (runner-specific)
 
 ```php

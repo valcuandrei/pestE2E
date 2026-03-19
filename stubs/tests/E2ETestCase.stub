@@ -11,12 +11,10 @@ abstract class E2ETestCase extends TestCase
     protected static string $e2ePackageManager = '{{PACKAGE_MANAGER}}';
 
     /**
-     * Whether the e2e targets have been registered.
-     */
-    private static bool $e2eTargetsRegistered = false;
-
-    /**
      * Register e2e targets.
+     *
+     * Re-register on every test: Laravel refreshes the container between tests,
+     * so a static "already registered" guard would leave an empty TargetRegistry.
      */
     protected function setUp(): void
     {
@@ -26,12 +24,6 @@ abstract class E2ETestCase extends TestCase
         if (config('pest-e2e.package_manager') === null) {
             config(['pest-e2e.package_manager' => self::$e2ePackageManager]);
         }
-
-        if (self::$e2eTargetsRegistered) {
-            return;
-        }
-
-        self::$e2eTargetsRegistered = true;
 
         e2e()->target('frontend', fn ($p) => $p
             ->dir('resources/js/e2e')

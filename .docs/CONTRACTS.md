@@ -10,6 +10,8 @@ Injected into every Node process:
 
 ## Suite execution contract
 
+**Process model:** E2E runs are **not parallel-safe**. Do not execute multiple Pest processes (e.g. `pest --parallel`) that each invoke the JS runner against the same app; parallel support is not implemented.
+
 The package is **runner-agnostic**. Two contracts define the bridge:
 
 - **`JsWorkerContract`** — runs the JS test process, returns `ProcessResultDTO`

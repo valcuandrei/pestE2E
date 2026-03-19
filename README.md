@@ -54,6 +54,10 @@ All browser logic lives in JavaScript.
 The public PHP API, authentication contract, and JSON report schema are locked.
 Internal runner adapters may evolve.
 
+### ⚠️ Parallel test execution is not supported
+
+**Do not use Pest’s `--parallel` option (or other parallel PHPUnit / process splitting) for suites that call `e2e()->…->run()`.** E2E tests must run **one process at a time**: they rely on a managed app server, auth tickets, shared testing DB/session configuration, and coordinated Playwright processes. Running Browser/E2E tests in parallel is **unsupported** and may fail unpredictably (lost targets, port conflicts, flaky auth). Run those tests **sequentially** (default for a single `pest` / `phpunit` process without `--parallel`). Parallel support may be added in a future release.
+
 ---
 
 # Installation
@@ -187,7 +191,7 @@ e2e()->target('frontend', fn ($p) => $p
     ->params(['baseUrl' => 'http://localhost'])
 );
 ```
->Targets should be registered once in your base E2E test case, not inside individual tests.
+>Register targets in your base E2E test case (`E2ETestCase::setUp()`), not inside individual test functions. Do not run those tests with `--parallel` (see **Parallel test execution is not supported** under [Status](#status) above).
 
 Run all tests:
 
@@ -308,6 +312,8 @@ Sail:
 ```bash
 sail artisan test
 ```
+
+**E2E / Browser tests:** keep the default **sequential** run. Avoid `pest --parallel` / `php artisan test --parallel` for directories or projects that include `e2e()->…->run()` — parallel execution is **not supported** at this time (see warning under [Status](#status)).
 
 ---
 

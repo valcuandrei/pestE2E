@@ -7,13 +7,15 @@
  * Copyright (c) 2026 Andrei Valcu
  */
 import { test, expect } from '@playwright/test';
+import { readParams } from '../pest-e2e/core.mjs';
 
 test('UserProfile can update their profile', async ({ page }) => {
     // Requires an authenticated session (handled by Pest E2E harness)
+    const { name, email } = await readParams();
     await page.goto('/settings/profile');
 
-    await page.locator('#name').fill('Test User');
-    await page.locator('#email').fill('test@example.com');
+    await page.locator('#name').fill(name);
+    await page.locator('#email').fill(email);
     await page.getByTestId('update-profile-button').click();
 
     await expect(page.getByText('Saved.')).toBeVisible();
