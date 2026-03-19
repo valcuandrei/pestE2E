@@ -45,13 +45,29 @@ function withFakeBin(string $tempDir, callable $fn, array $binaries = []): void
     }
 
     $savedPath = getenv('PATH');
+    $hadEnvPath = array_key_exists('PATH', $_ENV);
+    $savedEnvPath = $hadEnvPath ? $_ENV['PATH'] : null;
+    $hadServerPath = array_key_exists('PATH', $_SERVER);
+    $savedServerPath = $hadServerPath ? $_SERVER['PATH'] : null;
 
     putenv('PATH='.$fakeBin);
+    $_ENV['PATH'] = $fakeBin;
+    $_SERVER['PATH'] = $fakeBin;
 
     try {
         $fn();
     } finally {
         putenv('PATH='.$savedPath);
+        if ($hadEnvPath) {
+            $_ENV['PATH'] = $savedEnvPath;
+        } else {
+            unset($_ENV['PATH']);
+        }
+        if ($hadServerPath) {
+            $_SERVER['PATH'] = $savedServerPath;
+        } else {
+            unset($_SERVER['PATH']);
+        }
     }
 }
 
