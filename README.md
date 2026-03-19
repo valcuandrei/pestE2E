@@ -85,6 +85,7 @@ The installer can:
 * Create `.env.testing` from `.env` with E2E-appropriate overrides
 * Create `database/testing.sqlite` for SQLite tests
 * Configure `phpunit.xml` to let `.env.testing` control DB/cache (comment out overrides)
+* Ensure `phpunit.xml` defines a **Browser** testsuite for `tests/Browser` (when `phpunit.xml` exists; idempotent on every successful install)
 
 Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--setup-testing-database`, `--configure-phpunit`.
 

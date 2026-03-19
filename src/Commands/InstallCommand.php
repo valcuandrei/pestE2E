@@ -302,6 +302,14 @@ final class InstallCommand extends Command
             }
         }
 
+        if (is_file(base_path('phpunit.xml')) && $this->syncPhpunitBrowserTestsuite() === self::FAILURE) {
+            if (! $quiet) {
+                $this->error('Failed to add Browser testsuite to phpunit.xml');
+            }
+
+            return self::FAILURE;
+        }
+
         if (! $quiet) {
             $this->info('Pest E2E installed successfully');
             $this->info('There, now you have no excuses to not write E2E tests!');
@@ -1084,6 +1092,93 @@ final class InstallCommand extends Command
         }
 
         return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Ensure phpunit.xml includes a testsuite for Pest E2E (tests/Browser).
+     */
+    private function syncPhpunitBrowserTestsuite(): int
+    {
+        $path = base_path('phpunit.xml');
+        if (! is_file($path)) {
+            return self::SUCCESS;
+        }
+
+        $dom = $this->loadPhpunitXml($path);
+        if (! $dom instanceof \DOMDocument) {
+            return self::FAILURE;
+        }
+
+        if ($this->phpunitBrowserTestsuiteConfigured($dom)) {
+            return self::SUCCESS;
+        }
+
+        $this->ensurePhpunitBrowserTestsuiteOnDom($dom);
+
+        return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Whether phpunit.xml already references tests/Browser.
+     */
+    private function phpunitBrowserTestsuiteConfigured(\DOMDocument $dom): bool
+    {
+        $xpath = new \DOMXPath($dom);
+        $nodes = $xpath->query('//testsuite/directory');
+        if ($nodes === false) {
+            return false;
+        }
+
+        foreach ($nodes as $node) {
+            if ($node instanceof \DOMElement && trim($node->textContent) === 'tests/Browser') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Append a Browser testsuite for tests/Browser if missing.
+     */
+    private function ensurePhpunitBrowserTestsuiteOnDom(\DOMDocument $dom): void
+    {
+        if ($this->phpunitBrowserTestsuiteConfigured($dom)) {
+            return;
+        }
+
+        $root = $dom->documentElement;
+        if (! $root instanceof \DOMElement) {
+            return;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $testsuitesNodes = $xpath->query('./testsuites', $root);
+        $testsuites = ($testsuitesNodes !== false && $testsuitesNodes->length > 0)
+            ? $testsuitesNodes->item(0)
+            : null;
+
+        if (! $testsuites instanceof \DOMElement) {
+            $testsuites = $dom->createElement('testsuites');
+            $insertBefore = null;
+            foreach ($root->childNodes as $child) {
+                if ($child->nodeType === XML_ELEMENT_NODE) {
+                    $insertBefore = $child;
+
+                    break;
+                }
+            }
+            if ($insertBefore instanceof \DOMNode) {
+                $root->insertBefore($testsuites, $insertBefore);
+            } else {
+                $root->appendChild($testsuites);
+            }
+        }
+
+        $suite = $dom->createElement('testsuite');
+        $suite->setAttribute('name', 'Browser');
+        $suite->appendChild($dom->createElement('directory', 'tests/Browser'));
+        $testsuites->appendChild($suite);
     }
 
     /**

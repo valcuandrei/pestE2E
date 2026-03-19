@@ -74,6 +74,16 @@ function assertPhpunitEnvVarsCommented(string $phpunitPath): void
     }
 }
 
+function assertPhpunitBrowserTestsuitePresent(string $phpunitPath): void
+{
+    $dom = new DOMDocument;
+    $dom->preserveWhiteSpace = false;
+    expect(@$dom->load($phpunitPath))->toBeTrue();
+    $xpath = new DOMXPath($dom);
+    $nodes = $xpath->query("//testsuite[@name='Browser']/directory[text()='tests/Browser']");
+    expect($nodes !== false && $nodes->length > 0)->toBeTrue();
+}
+
 beforeEach(function (): void {
     $this->tempDir = sys_get_temp_dir().'/pest-e2e-install-'.uniqid((string) mt_rand(), true);
     mkdir($this->tempDir, 0755, true);
@@ -165,6 +175,7 @@ it('updates Pest.php and publishes when --yes and Playwright not installed', fun
 
     assertPhpunitEnvVarsCommented($this->tempDir.'/phpunit.xml');
     assertPhpunitExtensionRegistered($this->tempDir.'/phpunit.xml');
+    assertPhpunitBrowserTestsuitePresent($this->tempDir.'/phpunit.xml');
 
     expect(file_get_contents($this->tempDir.'/bootstrap/app.php'))->toContain('pest-e2e/auth/login');
     expect(file_exists($this->tempDir.'/.env.testing'))->toBeTrue();
@@ -187,6 +198,7 @@ it('registers Pest E2E PHPUnit extension when --no but phpunit.xml exists', func
         ->and(file_get_contents($this->tempDir.'/tests/Pest.php'))->toBe($originalPest);
 
     assertPhpunitExtensionRegistered($this->tempDir.'/phpunit.xml');
+    assertPhpunitBrowserTestsuitePresent($this->tempDir.'/phpunit.xml');
 });
 
 it('warns when CSRF exclusion cannot be applied', function (): void {
@@ -389,6 +401,7 @@ it('appends bootstrap into an existing empty extensions element', function (): v
     );
 
     assertPhpunitExtensionRegistered($this->tempDir.'/phpunit.xml');
+    assertPhpunitBrowserTestsuitePresent($this->tempDir.'/phpunit.xml');
 });
 
 it('fails publish base test case when vendor:publish fails', function (): void {
@@ -611,6 +624,29 @@ it('reports phpunit already configured when env vars are already commented', fun
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
         ->and($output->fetch())->toContain('phpunit.xml already configured');
+
+    assertPhpunitBrowserTestsuitePresent($this->tempDir.'/phpunit.xml');
+});
+
+it('does not duplicate Browser testsuite when already present in phpunit.xml', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><testsuites><testsuite name="Browser"><directory>tests/Browser</directory></testsuite></testsuites><php></php><extensions></extensions></phpunit>'
+    );
+
+    runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction']
+    );
+
+    $dom = new DOMDocument;
+    expect(@$dom->load($this->tempDir.'/phpunit.xml'))->toBeTrue();
+    $xpath = new DOMXPath($dom);
+    $nodes = $xpath->query("//testsuite[@name='Browser']");
+    expect($nodes !== false ? $nodes->length : 0)->toBe(1);
 });
 
 it('idempotently skips CSRF patch when route is already excluded', function (): void {
