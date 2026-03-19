@@ -107,8 +107,14 @@ final class ServerRunner
             // so auth sessions survive across requests.
             'SESSION_DRIVER' => ($_ENV['SESSION_DRIVER'] ?? '') === 'array' ? 'database' : ($_ENV['SESSION_DRIVER'] ?? 'database'),
             // Single worker for PHP built-in server to avoid session/state issues.
-            'PHP_CLI_SERVER_WORKERS' => '1',
+            // Not set on Windows: PHP_CLI_SERVER_WORKERS uses fork() which is unsupported there.
         ]);
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            unset($env['PHP_CLI_SERVER_WORKERS']);
+        } else {
+            $env['PHP_CLI_SERVER_WORKERS'] = '1';
+        }
 
         $this->process = new Process(
             $this->command(),
@@ -275,13 +281,16 @@ final class ServerRunner
 
     /**
      * Check if the server responds to HTTP.
+     *
+     * Uses a generous timeout for the readiness check because the first request
+     * triggers Laravel bootstrap, which can take several seconds (especially on Windows).
      */
-    private function httpResponds(string $url): bool
+    private function httpResponds(string $url, float $timeout = 8.0): bool
     {
         $context = stream_context_create([
             'http' => [
                 'method' => 'GET',
-                'timeout' => 0.5,
+                'timeout' => $timeout,
                 'ignore_errors' => true,
                 'header' => "Connection: close\r\n",
             ],

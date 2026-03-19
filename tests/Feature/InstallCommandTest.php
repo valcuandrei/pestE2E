@@ -10,6 +10,16 @@ use ValcuAndrei\PestE2E\Support\JsPackageManager;
 use ValcuAndrei\PestE2E\Tests\Support\FakePublishCommand;
 use ValcuAndrei\PestE2E\Tests\Support\MockJsPackageManager;
 
+function createInstallTestEnv(string $tempDir): void
+{
+    file_put_contents($tempDir.'/.env', "APP_KEY=base64:test\nAPP_ENV=local\nDB_CONNECTION=sqlite\nDB_DATABASE=laravel\nCACHE_STORE=array\nSESSION_DRIVER=array\n");
+    mkdir($tempDir.'/database', 0755, true);
+    file_put_contents(
+        $tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php><env name="DB_CONNECTION" value="sqlite"/><env name="CACHE_STORE" value="array"/><env name="SESSION_DRIVER" value="array"/></php></phpunit>'
+    );
+}
+
 beforeEach(function (): void {
     $this->tempDir = sys_get_temp_dir().'/pest-e2e-install-'.uniqid((string) mt_rand(), true);
     mkdir($this->tempDir, 0755, true);
@@ -74,6 +84,7 @@ it('fails when tests/Pest.php is missing', function (): void {
 
 it('updates Pest.php and publishes when --yes and Playwright not installed', function (): void {
     createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
 
     $exitCode = runInstall(
         args: ['--yes' => true],
@@ -111,6 +122,7 @@ it('does not modify files or publish when --no', function (): void {
 
 it('does not call installJsPackage when Playwright already installed', function (): void {
     createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
     $this->mockJs->hasPlaywright = true;
 
     $exitCode = runInstall(
@@ -127,8 +139,9 @@ it('does not call installJsPackage when Playwright already installed', function 
     expect($tags)->toContain('pest-e2e-js-playwright');
 });
 
-it('injects RefreshDatabase when Pest.php contains RefreshDatabase', function (): void {
+it('injects DatabaseMigrations for E2E Browser tests', function (): void {
     createPestPhp($this->tempDir, "<?php\n\ndeclare(strict_types=1);\n\nuse Illuminate\\Foundation\\Testing\\RefreshDatabase;\n\n");
+    createInstallTestEnv($this->tempDir);
     $this->mockJs->hasPlaywright = true;
 
     runInstall(
@@ -137,13 +150,14 @@ it('injects RefreshDatabase when Pest.php contains RefreshDatabase', function ()
     );
 
     $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
-    expect($pest)->toContain('RefreshDatabase')
+    expect($pest)->toContain('DatabaseMigrations')
         ->and($pest)->toContain('E2ETestCase::class')
-        ->and($pest)->toContain('->use(RefreshDatabase::class)');
+        ->and($pest)->toContain('->use(DatabaseMigrations::class)');
 });
 
 it('does not duplicate E2ETestCase when already present', function (): void {
     createPestPhp($this->tempDir, "<?php\n\ndeclare(strict_types=1);\n\npest()->extend(Tests\\E2ETestCase::class)->in('Browser');\n");
+    createInstallTestEnv($this->tempDir);
     $this->mockJs->hasPlaywright = true;
 
     runInstall(

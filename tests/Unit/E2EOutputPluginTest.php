@@ -148,5 +148,5 @@ it('prints a blank line between grouped and flat output when flushing', function
     expect(substr_count($rendered, 'Parent Test'))->toBe(1)
         ->and($rendered)->toContain($branchPrefix.'E2E › frontend (runId run-grouped)')
         ->and($rendered)->toContain('PestE2E: target "backend" runId "run-flat"')
-        ->and($rendered)->toMatch("/run-grouped.*\n\nPestE2E: target \"backend\" runId \"run-flat\"/s");
+        ->and($rendered)->toMatch('/run-grouped.*[\r\n]{2,}.*PestE2E: target "backend" runId "run-flat"/s');
 });

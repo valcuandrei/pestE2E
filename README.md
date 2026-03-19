@@ -78,6 +78,11 @@ The installer can:
 * Publish the JS harness
 * Publish the Playwright integration
 * Install Playwright
+* Create `.env.testing` from `.env` with E2E-appropriate overrides
+* Create `database/testing.sqlite` for SQLite tests
+* Configure `phpunit.xml` to let `.env.testing` control DB/cache (comment out overrides)
+
+Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--setup-testing-database`, `--configure-phpunit`.
 
 ### Unattended / CI mode
 
@@ -91,6 +96,26 @@ Alias:
 php artisan pest-e2e:install --unattended
 ```
 
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--yes` | Answer yes to all questions (includes setup-env-testing, setup-testing-database, configure-phpunit) |
+| `--no` | Answer no to all questions |
+| `--force` | Overwrite existing files when publishing |
+| `--update-pest` | Update Pest config to include E2ETestCase |
+| `--setup-env-testing` | Create `.env.testing` from `.env` with E2E overrides |
+| `--setup-testing-database` | Create `database/testing.sqlite` |
+| `--configure-phpunit` | Comment out DB/cache env in `phpunit.xml` so `.env.testing` controls them |
+| `--add-csrf-exclusion` | Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows) |
+| `--publish-config` | Publish config |
+| `--publish-base-test-case` | Publish E2ETestCase |
+| `--publish-js-harness` | Publish JS harness |
+| `--publish-js-playwright` | Publish Playwright adapter |
+| `--publish-browser-tests` | Publish browser tests |
+| `--publish-playwright-tests` | Publish Playwright tests |
+| `--install-playwright` | Install Playwright via npm |
+
 ---
 
 # Testing Environment (Important)
@@ -103,17 +128,34 @@ pestE2E starts a managed Laravel server using:
 
 If a `.env.testing` file exists, Laravel automatically loads it.
 
-You should create a `.env.testing` file with an isolated database configuration:
+**The installer can create this for you** with `--setup-env-testing` (included in `--yes`). It copies `.env` and applies E2E overrides:
+
+```dotenv
+APP_ENV=testing
+APP_URL=http://127.0.0.1
+
+DB_CONNECTION=sqlite
+DB_DATABASE=testing
+
+CACHE_STORE=database
+SESSION_DRIVER=database
+
+PEST_E2E_AUTH_ROUTE_ENABLED=true
+```
+
+For SQLite, the installer can also create `database/testing.sqlite` (`--setup-testing-database`) and configure `phpunit.xml` to omit DB/cache env vars so `.env.testing` controls them (`--configure-phpunit`).
+
+**Manual setup:** If you prefer to configure yourself, create `.env.testing` with an isolated database:
 
 ```dotenv
 APP_ENV=testing
 APP_DEBUG=true
 
-DB_CONNECTION=mysql
-DB_DATABASE=your_test_database
+DB_CONNECTION=sqlite
+DB_DATABASE=testing
 
-CACHE_STORE=file
-SESSION_DRIVER=file
+CACHE_STORE=database
+SESSION_DRIVER=database
 
 PEST_E2E_AUTH_ROUTE_ENABLED=true
 ```
@@ -123,8 +165,9 @@ This ensures:
 * Your development database is not modified
 * Auth routes are enabled only during testing
 * The Pest process and the managed server use the same database
+* Cache and session are shared (required for auth ticket exchange)
 
-Your `phpunit.xml` database configuration must match `.env.testing` (or be removed) so both processes remain in sync.
+Your `phpunit.xml` must not override `DB_CONNECTION`, `DB_DATABASE`, `CACHE_STORE`, or `SESSION_DRIVER` — let `.env.testing` control them. The installer can comment these out for you with `--configure-phpunit`.
 
 The managed server is started in isolation and inherits no development state beyond explicitly provided environment variables.
 

@@ -20,9 +20,14 @@ final class InstallCommand extends Command
         .' {--publish-base-test-case : Publish the Pest E2E base test case}'
         .' {--publish-js-harness : Publish the Pest E2E JS harness}'
         .' {--publish-js-playwright : Publish the Pest E2E JS Playwright}'
+        .' {--publish-browser-tests : Publish the Pest E2E browser tests}'
+        .' {--publish-playwright-tests : Publish the Pest E2E Playwright tests}'
         .' {--add-csrf-exclusion : Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows)}'
+        .' {--setup-env-testing : Create .env.testing from .env with E2E-appropriate overrides}'
+        .' {--setup-testing-database : Create database/testing.sqlite for SQLite tests}'
+        .' {--configure-phpunit : Comment out DB/cache env in phpunit.xml so .env.testing controls them}'
         .' {--install-playwright : Install Playwright}'
-        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion)}'
+        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion --setup-env-testing --setup-testing-database --configure-phpunit)}'
         .' {--no : Answer no to all questions (can be overridden by the individual options)}'
         .' {--unattended : Answer yes to all questions (shortcut for --yes)}';
 
@@ -60,7 +65,12 @@ final class InstallCommand extends Command
         $installPlaywright = $hasPlaywrightInstalled ? false : $this->shouldInstallPlaywright();
         $publishJsHarness = $this->shouldPublishJsHarness();
         $publishJsPlaywright = ($hasPlaywrightInstalled || $installPlaywright) && $this->shouldPublishJsPlaywright();
+        $publishBrowserTests = $this->shouldPublishBrowserTests();
+        $publishPlaywrightTests = $this->shouldPublishPlaywrightTests();
         $addCsrfExclusion = $this->shouldAddCsrfExclusion();
+        $setupEnvTesting = $this->shouldSetupEnvTesting();
+        $setupTestingDatabase = $this->shouldSetupTestingDatabase();
+        $configurePhpunit = $this->shouldConfigurePhpunit();
 
         if ($addCsrfExclusion) {
             if ($this->addCsrfExclusion() === self::SUCCESS) {
@@ -84,6 +94,8 @@ final class InstallCommand extends Command
 
                 return self::FAILURE;
             }
+        } elseif (! $quiet && $this->e2eTestCaseExists()) {
+            $this->info('Pest E2E base test case already published.');
         }
 
         if (! $this->pestPhpHasE2ETestCase() && $updatePestConfig) {
@@ -114,6 +126,80 @@ final class InstallCommand extends Command
 
                 return self::FAILURE;
             }
+        } elseif (! $quiet && $this->configExists()) {
+            $this->info('Pest E2E config already published.');
+        }
+
+        if ($setupEnvTesting) {
+            if ($this->createEnvTesting($force) === self::SUCCESS) {
+                if (! $quiet) {
+                    $this->info('.env.testing created successfully.');
+                }
+            } else {
+                if (! $quiet) {
+                    $this->error('Failed to create .env.testing');
+                }
+
+                return self::FAILURE;
+            }
+        } elseif (! $quiet && $this->envTestingExists()) {
+            $this->info('.env.testing already exists.');
+        }
+
+        if ($setupTestingDatabase) {
+            if ($this->createTestingDatabase($force) === self::SUCCESS) {
+                if (! $quiet) {
+                    $this->info('database/testing.sqlite created successfully.');
+                }
+            } else {
+                if (! $quiet) {
+                    $this->error('Failed to create database/testing.sqlite');
+                }
+
+                return self::FAILURE;
+            }
+        } elseif (! $quiet && $this->testingDatabaseExists()) {
+            $this->info('database/testing.sqlite already exists.');
+        }
+
+        if ($configurePhpunit) {
+            if ($this->configurePhpunit($force) === self::SUCCESS) {
+                if (! $quiet) {
+                    $this->info('phpunit.xml configured for .env.testing.');
+                }
+            } else {
+                if (! $quiet) {
+                    $this->error('Failed to configure phpunit.xml');
+                }
+
+                return self::FAILURE;
+            }
+        } elseif (! $quiet && $this->phpunitIsConfiguredForEnvTesting()) {
+            $this->info('phpunit.xml already configured for .env.testing.');
+        }
+
+        if ($publishBrowserTests) {
+            if ($this->publishBrowserTests($force) === self::SUCCESS) {
+                if (! $quiet) {
+                    $this->info('Pest E2E browser tests published successfully.');
+                }
+            } else {
+                if (! $quiet) {
+                    $this->error('Failed to publish Pest E2E browser tests');
+                }
+
+                return self::FAILURE;
+            }
+        } elseif (! $quiet && $this->browserTestsExist()) {
+            $this->info('Pest E2E browser tests already published.');
+        }
+
+        if (($hasPlaywrightInstalled || $installPlaywright) && $publishPlaywrightTests) {
+            if ($this->publishPlaywrightTests($force) === self::SUCCESS && ! $quiet) {
+                $this->info('Pest E2E Playwright tests published successfully.');
+            }
+        } elseif (! $quiet && $this->playwrightTestsExist()) {
+            $this->info('Pest E2E Playwright tests already published.');
         }
 
         $publishPlaywrightAdapter = function () use ($force, $quiet, $publishJsPlaywright): int {
@@ -129,6 +215,8 @@ final class InstallCommand extends Command
 
                     return self::FAILURE;
                 }
+            } elseif (! $quiet && $this->jsPlaywrightExists()) {
+                $this->info('Pest E2E JS Playwright already published.');
             }
 
             return self::SUCCESS;
@@ -146,6 +234,8 @@ final class InstallCommand extends Command
 
                 return self::FAILURE;
             }
+        } elseif (! $quiet && $this->jsHarnessExists()) {
+            $this->info('Pest E2E JS Harness already published.');
         }
 
         if (! $hasPlaywrightInstalled) {
@@ -184,7 +274,7 @@ final class InstallCommand extends Command
             $this->info('Pest E2E installed successfully');
             $this->info('There, now you have no excuses to not write E2E tests!');
 
-            if (! $publishJsHarness) {
+            if (! $publishJsHarness && ! $this->jsHarnessExists()) {
                 $this->info('When you are ready to publish the JS harness, run:');
                 $this->info('  php artisan vendor:publish --tag=pest-e2e-js-harness');
             }
@@ -204,11 +294,7 @@ final class InstallCommand extends Command
             return self::FAILURE;
         }
 
-        $dbTrait = str_contains($pest, 'RefreshDatabase')
-            ? 'RefreshDatabase'
-            : (str_contains($pest, 'DatabaseTransactions')
-                ? 'DatabaseTransactions'
-                : 'DatabaseMigrations');
+        $dbTrait = 'DatabaseMigrations';
         $dbTraitNamespace = 'Illuminate\Foundation\Testing\\'.$dbTrait;
 
         if (! str_contains($pest, 'use '.$dbTraitNamespace.';')) {
@@ -289,6 +375,22 @@ final class InstallCommand extends Command
     }
 
     /**
+     * Publish the Pest E2E browser tests.
+     */
+    private function publishBrowserTests(bool $force = false): int
+    {
+        return $this->publish(['pest-e2e-browser-tests'], $force);
+    }
+
+    /**
+     * Publish the Pest E2E Playwright tests.
+     */
+    private function publishPlaywrightTests(bool $force = false): int
+    {
+        return $this->publish(['pest-e2e-playwright-tests'], $force);
+    }
+
+    /**
      * Check if Playwright is installed.
      */
     private function hasPlaywrightInstalled(): bool
@@ -341,6 +443,104 @@ final class InstallCommand extends Command
     private function pestPhpExists(): bool
     {
         return file_exists($this->pestPhpPath());
+    }
+
+    /**
+     * Check if the E2ETestCase.php has been published.
+     */
+    private function e2eTestCaseExists(): bool
+    {
+        return is_file(base_path('tests/E2ETestCase.php'));
+    }
+
+    /**
+     * Check if the pest-e2e config has been published.
+     */
+    private function configExists(): bool
+    {
+        return is_file(config_path('pest-e2e.php'));
+    }
+
+    /**
+     * Check if the JS harness has been published.
+     */
+    private function jsHarnessExists(): bool
+    {
+        return is_file(resource_path('js/pest-e2e/core.mjs'));
+    }
+
+    /**
+     * Check if the JS Playwright adapter has been published.
+     */
+    private function jsPlaywrightExists(): bool
+    {
+        return is_file(resource_path('js/pest-e2e/playwright.mjs'));
+    }
+
+    /**
+     * Check if the browser tests have been published.
+     */
+    private function browserTestsExist(): bool
+    {
+        return is_dir(base_path('tests/Browser'));
+    }
+
+    /**
+     * Check if the Playwright tests have been published.
+     */
+    private function playwrightTestsExist(): bool
+    {
+        return is_dir(resource_path('js/e2e'));
+    }
+
+    /**
+     * Check if .env.testing exists.
+     */
+    private function envTestingExists(): bool
+    {
+        return is_file(base_path('.env.testing'));
+    }
+
+    /**
+     * Check if database/testing.sqlite exists.
+     */
+    private function testingDatabaseExists(): bool
+    {
+        return is_file(base_path('database/testing.sqlite'));
+    }
+
+    /**
+     * Check if phpunit.xml has DB/cache env vars commented out (so .env.testing controls them).
+     */
+    private function phpunitIsConfiguredForEnvTesting(): bool
+    {
+        $path = base_path('phpunit.xml');
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $content = file_get_contents($path);
+        if ($content === false) {
+            return false;
+        }
+
+        // Remove XML comments to check for uncommented env vars
+        $withoutComments = preg_replace('/<!--.*?-->/s', '', $content) ?? $content;
+
+        $uncommentedPatterns = [
+            '/<\s*env\s+name="DB_CONNECTION"/',
+            '/<\s*env\s+name="DB_DATABASE"/',
+            '/<\s*env\s+name="CACHE_STORE"/',
+            '/<\s*env\s+name="SESSION_DRIVER"/',
+        ];
+
+        foreach ($uncommentedPatterns as $pattern) {
+            if (preg_match($pattern, $withoutComments) === 1) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -407,6 +607,10 @@ final class InstallCommand extends Command
      */
     private function shouldPublishConfig(): bool
     {
+        if ($this->configExists() && ! $this->hasOptionFlag('publish-config')) {
+            return false;
+        }
+
         return $this->shouldAccept('publish-config', 'This package requires publishing the Pest E2E config. Publish it now?');
     }
 
@@ -415,6 +619,10 @@ final class InstallCommand extends Command
      */
     private function shouldPublishBaseTestCase(): bool
     {
+        if ($this->e2eTestCaseExists() && ! $this->hasOptionFlag('publish-base-test-case')) {
+            return false;
+        }
+
         return $this->shouldAccept('publish-base-test-case', 'This package requires publishing the Pest E2E base test case. Publish it now?');
     }
 
@@ -423,6 +631,10 @@ final class InstallCommand extends Command
      */
     private function shouldPublishJsHarness(): bool
     {
+        if ($this->jsHarnessExists() && ! $this->hasOptionFlag('publish-js-harness')) {
+            return false;
+        }
+
         return $this->shouldAccept('publish-js-harness', 'This package requires publishing the Pest E2E JS harness. Publish it now?');
     }
 
@@ -431,7 +643,35 @@ final class InstallCommand extends Command
      */
     private function shouldPublishJsPlaywright(): bool
     {
+        if ($this->jsPlaywrightExists() && ! $this->hasOptionFlag('publish-js-playwright')) {
+            return false;
+        }
+
         return $this->shouldAccept('publish-js-playwright', 'This package requires publishing the Pest E2E JS Playwright. Publish it now?');
+    }
+
+    /**
+     * Should publish the Pest E2E browser tests.
+     */
+    private function shouldPublishBrowserTests(): bool
+    {
+        if ($this->browserTestsExist() && ! $this->hasOptionFlag('publish-browser-tests')) {
+            return false;
+        }
+
+        return $this->shouldAccept('publish-browser-tests', 'Do you want to publish the Pest E2E browser tests?');
+    }
+
+    /**
+     * Should publish the Pest E2E Playwright tests.
+     */
+    private function shouldPublishPlaywrightTests(): bool
+    {
+        if ($this->playwrightTestsExist() && ! $this->hasOptionFlag('publish-playwright-tests')) {
+            return false;
+        }
+
+        return $this->shouldAccept('publish-playwright-tests', 'Do you want to publish the Pest E2E Playwright tests?');
     }
 
     /**
@@ -448,6 +688,178 @@ final class InstallCommand extends Command
     private function shouldAddCsrfExclusion(): bool
     {
         return $this->shouldAccept('add-csrf-exclusion', 'Add pest-e2e auth route to CSRF exclusion? (required for Herd/Windows)', true);
+    }
+
+    /**
+     * Should create .env.testing.
+     */
+    private function shouldSetupEnvTesting(): bool
+    {
+        if ($this->envTestingExists() && ! $this->hasOptionFlag('setup-env-testing')) {
+            return false;
+        }
+
+        return $this->shouldAccept('setup-env-testing', 'Create .env.testing from .env with E2E-appropriate overrides?');
+    }
+
+    /**
+     * Should create database/testing.sqlite.
+     */
+    private function shouldSetupTestingDatabase(): bool
+    {
+        if ($this->testingDatabaseExists() && ! $this->hasOptionFlag('setup-testing-database')) {
+            return false;
+        }
+
+        return $this->shouldAccept('setup-testing-database', 'Create database/testing.sqlite for SQLite tests?');
+    }
+
+    /**
+     * Should configure phpunit.xml to let .env.testing control DB/cache.
+     */
+    private function shouldConfigurePhpunit(): bool
+    {
+        if ($this->phpunitIsConfiguredForEnvTesting() && ! $this->hasOptionFlag('configure-phpunit')) {
+            return false;
+        }
+
+        return $this->shouldAccept('configure-phpunit', 'Comment out DB/cache env in phpunit.xml so .env.testing controls them?');
+    }
+
+    /**
+     * Create .env.testing from .env with E2E-appropriate overrides.
+     */
+    private function createEnvTesting(bool $force = false): int
+    {
+        $path = base_path('.env.testing');
+        if (is_file($path) && ! $force) {
+            return self::SUCCESS;
+        }
+
+        $envPath = base_path('.env');
+        if (! is_file($envPath)) {
+            if (! $this->output->isQuiet()) {
+                $this->warn('.env file not found. Skipping .env.testing creation. Run php artisan key:generate first.');
+            }
+
+            return self::SUCCESS;
+        }
+
+        $content = file_get_contents($envPath);
+        if ($content === false) {
+            return self::FAILURE;
+        }
+
+        $overrides = [
+            'APP_ENV' => 'testing',
+            'APP_URL' => 'http://127.0.0.1',
+            'DB_CONNECTION' => 'sqlite',
+            'DB_DATABASE' => 'testing',
+            'CACHE_STORE' => 'database',
+            'SESSION_DRIVER' => 'database',
+            'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
+        ];
+
+        $lines = preg_split('/\r\n|\r|\n/', $content);
+        if ($lines === false) {
+            return self::FAILURE;
+        }
+
+        $result = [];
+        $seen = [];
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || str_starts_with($trimmed, '#')) {
+                $result[] = $line;
+
+                continue;
+            }
+
+            if (preg_match('/^([A-Za-z_]\w*)=(.*)$/', $trimmed, $m) === 1) {
+                $key = $m[1];
+                $seen[$key] = true;
+                if (array_key_exists($key, $overrides)) {
+                    $result[] = $key.'='.$overrides[$key];
+
+                    continue;
+                }
+            }
+
+            $result[] = $line;
+        }
+
+        foreach ($overrides as $key => $value) {
+            if (! isset($seen[$key])) {
+                $result[] = $key.'='.$value;
+            }
+        }
+
+        $output = implode("\n", $result);
+
+        return file_put_contents($path, $output) !== false ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Create database/testing.sqlite for SQLite tests.
+     */
+    private function createTestingDatabase(bool $force = false): int
+    {
+        $path = base_path('database/testing.sqlite');
+        if (is_file($path) && ! $force) {
+            return self::SUCCESS;
+        }
+
+        $dir = dirname($path);
+        if (! is_dir($dir) && ! @mkdir($dir, 0755, true) && ! is_dir($dir)) {
+            return self::FAILURE;
+        }
+
+        return touch($path) ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Comment out DB/cache env vars in phpunit.xml so .env.testing controls them.
+     */
+    private function configurePhpunit(bool $force = false): int
+    {
+        $path = base_path('phpunit.xml');
+        if (! is_file($path)) {
+            return self::FAILURE;
+        }
+
+        if ($this->phpunitIsConfiguredForEnvTesting() && ! $force) {
+            return self::SUCCESS;
+        }
+
+        $content = file_get_contents($path);
+        if ($content === false) {
+            return self::FAILURE;
+        }
+
+        $varsToComment = ['DB_CONNECTION', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER'];
+
+        foreach ($varsToComment as $var) {
+            $pattern = '/(\s*)<env\s+name="'.$var.'"\s+value="([^"]*)"\s*\/?>\s*\n/';
+            $content = preg_replace_callback(
+                $pattern,
+                fn (array $m): string => $m[1].'<!-- <env name="'.$var.'" value="'.$m[2].'"/> -->'."\n",
+                $content,
+                1
+            ) ?? $content;
+        }
+
+        if (! str_contains($content, 'E2E: Omit so .env.testing')) {
+            $comment = "        <!-- E2E: Omit DB/cache env so .env.testing controls them (required for auth ticket sharing) -->\n";
+            $content = preg_replace(
+                '/(<php>\s*\n)/',
+                '$1'.$comment,
+                $content,
+                1
+            ) ?? $content;
+        }
+
+        return file_put_contents($path, $content) !== false ? self::SUCCESS : self::FAILURE;
     }
 
     /**

@@ -53,6 +53,7 @@ it('prints inline e2e output after the test line and does not repeat at the end'
 
     $rendered = $output->fetch();
     $plainText = normalizeFormattedOutput($rendered);
+    $plainText = str_replace("\r\n", "\n", $plainText);
     $branchPrefix = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::BRANCH_PREFIX;
     $childIndent = E2EOutputFormatter::BASE_INDENT.E2EOutputFormatter::CHILD_INDENT;
 
