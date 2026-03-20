@@ -438,7 +438,7 @@ final class InstallCommand extends Command
             return;
         }
 
-        $detected = $this->resolvePackageManagerKeyForE2EStub();
+        $detected = $this->e2ePackageManagerKey();
         $content = str_replace('{{PACKAGE_MANAGER}}', $detected, $content);
 
         file_put_contents($path, $content);
