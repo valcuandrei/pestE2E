@@ -301,7 +301,7 @@ final class InstallCommand extends Command
                     }
                 } else {
                     if (! $quiet) {
-                        $this->error('Failed to install Playwright');
+                        $this->error('Failed to install Playwright or download browsers (playwright install).');
                     }
 
                     return self::FAILURE;
@@ -586,16 +586,27 @@ final class InstallCommand extends Command
         try {
             $tty = Process::isTtySupported() && $this->input->isInteractive() && ! (bool) $this->option('unattended');
 
+            $out = function (string $type, string $buffer): void {
+                $this->output->write($buffer);
+            };
+
             $process = $this->jsPackageManager->installJsPackage(
                 package: $this->playwrightPackage(),
                 dev: true,
                 tty: $tty,
-                outputCallback: function (string $type, string $buffer): void {
-                    $this->output->write($buffer);
-                },
+                outputCallback: $out,
             );
 
-            return $process && $process->isSuccessful() ? self::SUCCESS : self::FAILURE;
+            if (! $process || ! $process->isSuccessful()) {
+                return self::FAILURE;
+            }
+
+            $browsers = $this->jsPackageManager->runLocalOrDlxBinary('playwright', ['install'], $tty, $out);
+            if (! $browsers || ! $browsers->isSuccessful()) {
+                return self::FAILURE;
+            }
+
+            return self::SUCCESS;
         } finally {
             CliOptions::$packageManager = $previousCliPm;
         }

@@ -81,7 +81,7 @@ The installer can:
 * Publish the base E2E test case
 * Publish the JS harness
 * Publish the Playwright integration
-* Install Playwright
+* Install `@playwright/test` and download Playwright **browser binaries** (`playwright install`)
 * Create `.env.testing` from `.env` with E2E-appropriate overrides
 * Create `database/testing.sqlite` for SQLite tests
 * Configure `phpunit.xml` to let `.env.testing` control DB/cache (comment out overrides)
@@ -123,7 +123,7 @@ php artisan pest-e2e:install --unattended
 | `--publish-js-playwright` | Publish Playwright adapter |
 | `--publish-browser-tests` | Publish browser tests |
 | `--publish-playwright-tests` | Publish Playwright tests |
-| `--install-playwright` | Install Playwright via npm |
+| `--install-playwright` | Install `@playwright/test` and run `playwright install` (browser binaries) |
 | `--package-manager=` | Force the value embedded in `E2ETestCase` and used for Playwright install (`npm`, `yarn`, `pnpm`, `bun`); skips PATH / lockfile detection and interactive choice |
 
 ---

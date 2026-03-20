@@ -300,6 +300,60 @@ class JsPackageManager
     }
 
     /**
+     * Run a binary from node_modules/.bin when present; otherwise via the active package manager's dlx runner (e.g. npx).
+     *
+     * Uses no process timeout (intended for long-running local CLI work).
+     *
+     * @param  array<string>  $arguments  Arguments for the binary (excludes the binary name itself).
+     * @param  callable(string $type, string $buffer): void|null  $outputCallback
+     */
+    public function runLocalOrDlxBinary(
+        string $binary,
+        array $arguments,
+        bool $tty = false,
+        ?callable $outputCallback = null,
+        ?string $workDir = null,
+    ): Process|false {
+        $cwd = $workDir ?? base_path();
+        $bin = $this->getLocalBinPath($binary, $workDir);
+        if (is_string($bin) && is_file($bin)) {
+            return $this->runProcessWithoutTimeout([$bin, ...$arguments], $cwd, $tty, $outputCallback);
+        }
+
+        $pm = $this->activePackageManager();
+        if (! $pm || ! isset($pm['dlx'])) {
+            return false;
+        }
+
+        $prefix = $this->ensureStringArray($pm['dlx']);
+
+        return $this->runProcessWithoutTimeout([...$prefix, $binary, ...$arguments], $cwd, $tty, $outputCallback);
+    }
+
+    /**
+     * @param  array<string>  $command
+     * @param  callable(string $type, string $buffer): void|null  $outputCallback
+     */
+    private function runProcessWithoutTimeout(
+        array $command,
+        string $cwd,
+        bool $tty,
+        ?callable $outputCallback,
+    ): Process {
+        $process = new Process($command, $cwd);
+        $process->setTimeout(null);
+        $process->setTty($tty);
+
+        if ($outputCallback !== null) {
+            $process->run($outputCallback);
+        } else {
+            $process->run();
+        }
+
+        return $process;
+    }
+
+    /**
      * Initialize a project.
      *
      * @param  bool  $tty  Whether to use a TTY.

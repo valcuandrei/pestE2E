@@ -176,7 +176,8 @@ it('restores CliOptions package manager after Playwright install', function (): 
     );
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
-        ->and(CliOptions::$packageManager)->toBe('yarn');
+        ->and(CliOptions::$packageManager)->toBe('yarn')
+        ->and($this->mockJs->playwrightBrowsersInstallCallCount)->toBe(1);
 });
 
 it('updates Pest.php and publishes when --yes and Playwright not installed', function (): void {
@@ -193,6 +194,7 @@ it('updates Pest.php and publishes when --yes and Playwright not installed', fun
 
     expect($exitCode)->toBe(InstallCommand::SUCCESS)
         ->and($this->mockJs->installCallCount)->toBe(1)
+        ->and($this->mockJs->playwrightBrowsersInstallCallCount)->toBe(1)
         ->and($output->fetch())->toContain('CSRF exclusion for pest-e2e auth route added successfully');
 
     $tagSets = array_column($this->fakePublish->calls, 'tag');
@@ -514,7 +516,23 @@ it('fails install Playwright when npm install returns unsuccessful', function ()
         argvFlags: ['--yes', '--no-interaction']
     );
 
-    expect($exitCode)->toBe(InstallCommand::FAILURE);
+    expect($exitCode)->toBe(InstallCommand::FAILURE)
+        ->and($this->mockJs->playwrightBrowsersInstallCallCount)->toBe(0);
+});
+
+it('fails install Playwright when browser download returns unsuccessful', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->playwrightBrowsersInstallReturnsSuccess = false;
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE)
+        ->and($this->mockJs->installCallCount)->toBe(1)
+        ->and($this->mockJs->playwrightBrowsersInstallCallCount)->toBe(1);
 });
 
 it('fails after Playwright install when js-playwright publish fails', function (): void {

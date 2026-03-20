@@ -19,6 +19,10 @@ final class MockJsPackageManager extends JsPackageManager
 
     public int $installCallCount = 0;
 
+    public int $playwrightBrowsersInstallCallCount = 0;
+
+    public bool $playwrightBrowsersInstallReturnsSuccess = true;
+
     /** @var array<string, string> */
     public array $detectedLockfilesOverride = [];
 
@@ -64,5 +68,17 @@ final class MockJsPackageManager extends JsPackageManager
         $this->installCallCount++;
 
         return new ProcessStub($this->installReturnsSuccess);
+    }
+
+    public function runLocalOrDlxBinary(
+        string $binary,
+        array $arguments,
+        bool $tty = false,
+        ?callable $outputCallback = null,
+        ?string $workDir = null,
+    ): Process|false {
+        $this->playwrightBrowsersInstallCallCount++;
+
+        return new ProcessStub($this->playwrightBrowsersInstallReturnsSuccess);
     }
 }
