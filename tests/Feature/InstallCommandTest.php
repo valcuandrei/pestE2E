@@ -52,6 +52,22 @@ PHP
     );
 }
 
+function createSailComposeEnvironment(string $tempDir, string $composeFilename = 'compose.yml'): void
+{
+    file_put_contents($tempDir.'/composer.json', json_encode([
+        'require-dev' => ['laravel/sail' => '^1.41'],
+    ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+    mkdir($tempDir.'/vendor/laravel/sail', 0755, true);
+    file_put_contents($tempDir.'/'.$composeFilename, <<<'YAML'
+services:
+    laravel.test:
+        image: sail-placeholder
+        volumes:
+            - '.:/var/www/html'
+
+YAML);
+}
+
 function assertPhpunitExtensionRegistered(string $phpunitPath): void
 {
     $dom = new DOMDocument;
@@ -740,4 +756,99 @@ it('reuses cached Pest.php content in getPestPhp after first read', function ():
 
     file_put_contents($this->tempDir.'/tests/Pest.php', "<?php\necho 'v2';\n");
     expect($g->invoke($command))->toContain('v1');
+});
+
+it('merges WSLg headed-mode config into the resolved Sail compose file', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php></php><extensions></extensions></phpunit>'
+    );
+    createSailComposeEnvironment($this->tempDir, 'docker-compose.yml');
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction', '--sail-wslg-headed']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS);
+    $yaml = file_get_contents($this->tempDir.'/docker-compose.yml');
+    expect($yaml)->toContain('DISPLAY')
+        ->and($yaml)->toContain('WAYLAND_DISPLAY')
+        ->and($yaml)->toContain('/mnt/wslg:/mnt/wslg')
+        ->and($yaml)->toContain('/tmp/.X11-unix:/tmp/.X11-unix');
+});
+
+it('prefers compose.yml over docker-compose.yml when both exist', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php></php><extensions></extensions></phpunit>'
+    );
+    createSailComposeEnvironment($this->tempDir, 'compose.yml');
+    file_put_contents($this->tempDir.'/docker-compose.yml', "services:\n    other:\n        image: other\n");
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction', '--sail-wslg-headed']
+    );
+
+    expect(file_get_contents($this->tempDir.'/compose.yml'))->toContain('DISPLAY');
+    expect(file_get_contents($this->tempDir.'/docker-compose.yml'))->not->toContain('DISPLAY');
+});
+
+it('does not merge Sail compose when laravel.test is absent', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php></php><extensions></extensions></phpunit>'
+    );
+    file_put_contents($this->tempDir.'/composer.json', json_encode([
+        'require-dev' => ['laravel/sail' => '^1.41'],
+    ], JSON_THROW_ON_ERROR));
+    mkdir($this->tempDir.'/vendor/laravel/sail', 0755, true);
+    file_put_contents($this->tempDir.'/compose.yml', "services:\n    mysql:\n        image: mysql\n");
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction', '--sail-wslg-headed']
+    );
+
+    expect(file_get_contents($this->tempDir.'/compose.yml'))->not->toContain('DISPLAY');
+});
+
+it('reports Sail compose already has WSLg settings after merge', function (): void {
+    createPestPhp($this->tempDir);
+    file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");
+    mkdir($this->tempDir.'/database', 0755, true);
+    file_put_contents(
+        $this->tempDir.'/phpunit.xml',
+        '<?xml version="1.0"?><phpunit><php></php><extensions></extensions></phpunit>'
+    );
+    createSailComposeEnvironment($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction', '--sail-wslg-headed']
+    );
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--no' => true],
+        argvFlags: ['--no', '--no-interaction', '--sail-wslg-headed'],
+        output: $output
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($output->fetch())->toContain('already includes WSLg');
 });

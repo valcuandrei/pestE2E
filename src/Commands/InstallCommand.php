@@ -6,6 +6,7 @@ namespace ValcuAndrei\PestE2E\Commands;
 
 use Illuminate\Console\Command;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Yaml\Yaml;
 use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 
@@ -27,9 +28,10 @@ final class InstallCommand extends Command
         .' {--setup-env-testing : Create .env.testing from .env with E2E-appropriate overrides}'
         .' {--setup-testing-database : Create database/testing.sqlite for SQLite tests}'
         .' {--configure-phpunit : Comment out DB/cache env in phpunit.xml so .env.testing controls them}'
+        .' {--sail-wslg-headed : Add WSLg display/volume config to the Sail laravel.test service in compose file}'
         .' {--install-playwright : Install Playwright}'
         .' {--package-manager= : Package manager written into E2ETestCase (npm, yarn, pnpm, bun); skips detection}'
-        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion --setup-env-testing --setup-testing-database --configure-phpunit)}'
+        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion --setup-env-testing --setup-testing-database --configure-phpunit --sail-wslg-headed)}'
         .' {--no : Answer no to all questions (can be overridden by the individual options)}'
         .' {--unattended : Answer yes to all questions (shortcut for --yes)}';
 
@@ -87,6 +89,7 @@ final class InstallCommand extends Command
         $setupEnvTesting = $this->shouldSetupEnvTesting();
         $setupTestingDatabase = $this->shouldSetupTestingDatabase();
         $configurePhpunit = $this->shouldConfigurePhpunit();
+        $mergeSailWslgHeaded = $this->shouldMergeSailWslgHeadedCompose();
 
         if ($addCsrfExclusion) {
             if ($this->addCsrfExclusion() === self::SUCCESS) {
@@ -192,6 +195,19 @@ final class InstallCommand extends Command
             }
         } elseif (! $quiet && $this->phpunitIsConfiguredForEnvTesting()) {
             $this->info('phpunit.xml already configured for .env.testing.');
+        }
+
+        if ($mergeSailWslgHeaded) {
+            $composePath = $this->resolveComposeFilePath();
+            if ($this->mergeSailWslgHeadedCompose() === self::SUCCESS) {
+                if (! $quiet && is_string($composePath)) {
+                    $this->info('WSLg headed-mode environment and volumes merged into '.basename($composePath).' (laravel.test).');
+                }
+            } elseif (! $quiet) {
+                $this->warn('Could not merge Sail WSLg config. Add the "Headed Mode in Sail" block from README manually to your compose file.');
+            }
+        } elseif (! $quiet && $this->sailProjectDetected() && $this->composeFileHasSailWslgHeadedConfig()) {
+            $this->info('Sail compose file already includes WSLg headed-mode settings.');
         }
 
         if ($this->phpunitExtensionIsRegistered()) {
@@ -938,6 +954,326 @@ final class InstallCommand extends Command
         }
 
         return $this->shouldAccept('configure-phpunit', 'Comment out DB/cache env in phpunit.xml so .env.testing controls them?');
+    }
+
+    /**
+     * Merge README WSLg headed-mode snippets into the Sail laravel.test service.
+     */
+    private function shouldMergeSailWslgHeadedCompose(): bool
+    {
+        if (! $this->sailProjectDetected()) {
+            return false;
+        }
+
+        if ($this->composeFileHasSailWslgHeadedConfig()) {
+            return false;
+        }
+
+        return $this->shouldAccept(
+            'sail-wslg-headed',
+            'Laravel Sail was detected. Add WSLg display and volume mounts to the laravel.test service for headed Playwright in Docker (WSL2 + WSLg)? See README § Headed Mode in Sail.',
+            false
+        );
+    }
+
+    /**
+     * Docker Compose default filename order (first existing file wins).
+     */
+    private function resolveComposeFilePath(): ?string
+    {
+        foreach (['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'] as $name) {
+            $path = base_path($name);
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private function composerDeclaresLaravelSail(): bool
+    {
+        $path = base_path('composer.json');
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $json = file_get_contents($path);
+        if ($json === false) {
+            return false;
+        }
+
+        try {
+            /** @var mixed $data */
+            $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return false;
+        }
+
+        if (! is_array($data)) {
+            return false;
+        }
+
+        foreach (['require', 'require-dev'] as $section) {
+            if (! isset($data[$section])) {
+                continue;
+            }
+            if (! is_array($data[$section])) {
+                continue;
+            }
+            if (array_key_exists('laravel/sail', $data[$section])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function sailProjectDetected(): bool
+    {
+        $composePath = $this->resolveComposeFilePath();
+        if ($composePath === null) {
+            return false;
+        }
+
+        if (! is_dir(base_path('vendor/laravel/sail')) && ! $this->composerDeclaresLaravelSail()) {
+            return false;
+        }
+
+        try {
+            $data = Yaml::parseFile($composePath);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (! is_array($data)) {
+            return false;
+        }
+
+        $services = $data['services'] ?? null;
+        if (! is_array($services)) {
+            return false;
+        }
+
+        $laravelTest = $services['laravel.test'] ?? null;
+
+        return is_array($laravelTest);
+    }
+
+    private function composeFileHasSailWslgHeadedConfig(): bool
+    {
+        $composePath = $this->resolveComposeFilePath();
+        if ($composePath === null || ! is_readable($composePath)) {
+            return false;
+        }
+
+        try {
+            $data = Yaml::parseFile($composePath);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (! is_array($data)) {
+            return false;
+        }
+
+        $services = $data['services'] ?? null;
+        if (! is_array($services)) {
+            return false;
+        }
+
+        $service = $services['laravel.test'] ?? null;
+        if (! is_array($service)) {
+            return false;
+        }
+
+        return $this->serviceHasWslgEnvironment($service)
+            && $this->serviceHasWslgVolumes($service);
+    }
+
+    /**
+     * @param  array<mixed>  $service
+     */
+    private function serviceHasWslgEnvironment(array $service): bool
+    {
+        $keys = ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'PULSE_SERVER'];
+        $env = $service['environment'] ?? null;
+        if (! is_array($env)) {
+            return false;
+        }
+
+        if ($env !== [] && array_is_list($env)) {
+            foreach ($keys as $key) {
+                $found = false;
+                foreach ($env as $entry) {
+                    if (! is_string($entry)) {
+                        continue;
+                    }
+                    $trimmed = trim($entry);
+                    if (str_starts_with($trimmed, $key.'=') || str_starts_with($trimmed, $key.':')) {
+                        $found = true;
+                        break;
+                    }
+                }
+                if (! $found) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        foreach ($keys as $key) {
+            if (! array_key_exists($key, $env)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<mixed>  $service
+     */
+    private function serviceHasWslgVolumes(array $service): bool
+    {
+        $required = ['/mnt/wslg:/mnt/wslg', '/tmp/.X11-unix:/tmp/.X11-unix'];
+        $volumes = $service['volumes'] ?? null;
+        if (! is_array($volumes) || ! array_is_list($volumes)) {
+            return false;
+        }
+
+        foreach ($required as $mount) {
+            if (! in_array($mount, $volumes, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<mixed>  $env
+     * @return array<mixed>
+     */
+    private function mergeWslgEnvironment(array $env): array
+    {
+        $wslg = [
+            'DISPLAY' => '${DISPLAY}',
+            'WAYLAND_DISPLAY' => '${WAYLAND_DISPLAY}',
+            'XDG_RUNTIME_DIR' => '${XDG_RUNTIME_DIR}',
+            'PULSE_SERVER' => '${PULSE_SERVER}',
+        ];
+
+        if ($env !== [] && array_is_list($env)) {
+            $out = $env;
+            foreach ($wslg as $key => $value) {
+                $found = false;
+                foreach ($env as $entry) {
+                    if (! is_string($entry)) {
+                        continue;
+                    }
+                    $trimmed = trim($entry);
+                    if (str_starts_with($trimmed, $key.'=') || str_starts_with($trimmed, $key.':')) {
+                        $found = true;
+                        break;
+                    }
+                }
+                if (! $found) {
+                    $out[] = $key.'='.$value;
+                }
+            }
+
+            return $out;
+        }
+
+        foreach ($wslg as $key => $value) {
+            if (! array_key_exists($key, $env)) {
+                $env[$key] = $value;
+            }
+        }
+
+        return $env;
+    }
+
+    /**
+     * @param  list<mixed>  $volumes
+     * @return list<string>
+     */
+    private function mergeWslgVolumes(array $volumes): array
+    {
+        $extra = ['/mnt/wslg:/mnt/wslg', '/tmp/.X11-unix:/tmp/.X11-unix'];
+        $out = [];
+        foreach ($volumes as $v) {
+            if (is_string($v)) {
+                $out[] = $v;
+            }
+        }
+        foreach ($extra as $mount) {
+            if (! in_array($mount, $out, true)) {
+                $out[] = $mount;
+            }
+        }
+
+        return $out;
+    }
+
+    private function mergeSailWslgHeadedCompose(): int
+    {
+        $path = $this->resolveComposeFilePath();
+        if ($path === null) {
+            return self::FAILURE;
+        }
+
+        $raw = file_get_contents($path);
+        if ($raw === false) {
+            return self::FAILURE;
+        }
+
+        try {
+            $data = Yaml::parse($raw);
+        } catch (\Throwable) {
+            return self::FAILURE;
+        }
+
+        if (! is_array($data)) {
+            return self::FAILURE;
+        }
+
+        $services = $data['services'] ?? null;
+        if (! is_array($services)) {
+            return self::FAILURE;
+        }
+
+        $service = $services['laravel.test'] ?? null;
+        if (! is_array($service)) {
+            return self::FAILURE;
+        }
+
+        $env = $service['environment'] ?? [];
+        if (! is_array($env)) {
+            return self::FAILURE;
+        }
+        $service['environment'] = $this->mergeWslgEnvironment($env);
+
+        $volumes = $service['volumes'] ?? [];
+        if (! is_array($volumes) || ($volumes !== [] && ! array_is_list($volumes))) {
+            return self::FAILURE;
+        }
+        $listVolumes = $volumes;
+        $merged = $this->mergeWslgVolumes($listVolumes);
+        $service['volumes'] = $merged;
+
+        $services['laravel.test'] = $service;
+        $data['services'] = $services;
+
+        $flags = Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE;
+        $dumped = Yaml::dump($data, 8, 4, $flags);
+        if ($dumped === '' || $dumped === '0') {
+            return self::FAILURE;
+        }
+
+        return file_put_contents($path, $dumped) !== false ? self::SUCCESS : self::FAILURE;
     }
 
     /**

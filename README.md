@@ -86,6 +86,7 @@ The installer can:
 * Create `database/testing.sqlite` for SQLite tests
 * Configure `phpunit.xml` to let `.env.testing` control DB/cache (comment out overrides)
 * Ensure `phpunit.xml` defines a **Browser** testsuite for `tests/Browser` (when `phpunit.xml` exists; idempotent on every successful install)
+* When **Laravel Sail** is present (`laravel/sail` in `composer.json` or `vendor/laravel/sail`, plus a `laravel.test` service), offer to merge the **Headed Mode in Sail** block into your Docker Compose file — the file is chosen in the same order Docker Compose does: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, then `docker-compose.yml`
 
 Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--setup-testing-database`, `--configure-phpunit`.
 
@@ -107,13 +108,14 @@ php artisan pest-e2e:install --unattended
 
 | Option | Description |
 |--------|-------------|
-| `--yes` | Answer yes to all questions (performs full setup: update-pest, publish-config, publish-base-test-case, publish-js-harness, publish-js-playwright, add-csrf-exclusion, setup-env-testing, setup-testing-database, configure-phpunit, install-playwright) |
+| `--yes` | Answer yes to all questions (performs full setup: update-pest, publish-config, publish-base-test-case, publish-js-harness, publish-js-playwright, add-csrf-exclusion, setup-env-testing, setup-testing-database, configure-phpunit, sail-wslg-headed when Sail is detected, install-playwright) |
 | `--no` | Answer no to all questions |
 | `--force` | Overwrite existing files when publishing |
 | `--update-pest` | Update Pest config to include E2ETestCase |
 | `--setup-env-testing` | Create `.env.testing` from `.env` with E2E overrides |
 | `--setup-testing-database` | Create `database/testing.sqlite` |
 | `--configure-phpunit` | Comment out DB/cache env in `phpunit.xml` so `.env.testing` controls them |
+| `--sail-wslg-headed` | Merge WSLg display/volume settings into the Sail `laravel.test` service of the resolved Compose file (see **Headed Mode in Sail** below) |
 | `--add-csrf-exclusion` | Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows) |
 | `--publish-config` | Publish config |
 | `--publish-base-test-case` | Publish E2ETestCase |
