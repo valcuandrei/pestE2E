@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use ValcuAndrei\PestE2E\Commands\InstallCommand;
+use ValcuAndrei\PestE2E\Install\InstallContext;
+use ValcuAndrei\PestE2E\Install\InstallPlan;
+use ValcuAndrei\PestE2E\Install\Steps\UpdatePestConfigStep;
 use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
@@ -756,10 +761,23 @@ it('updatePestConfig returns FAILURE when Pest.php is missing', function (): voi
     unlink($this->tempDir.'/tests/Pest.php');
 
     $command = app(InstallCommand::class);
-    $method = new ReflectionMethod(InstallCommand::class, 'updatePestConfig');
+    $ctx = new InstallContext(
+        new InstallPlan(false, false, false, false, false, false, false, false, false, false, false, false, false),
+        $command,
+        new ArrayInput([]),
+        new NullOutput,
+        $this->mockJs,
+        false,
+        false,
+        static fn (array $tags, bool $force): int => $command->call('vendor:publish', array_merge(['--tag' => $tags], $force ? ['--force' => true] : [])),
+        static fn (string $name): mixed => $command->option($name),
+    );
+
+    $step = new UpdatePestConfigStep;
+    $method = new ReflectionMethod(UpdatePestConfigStep::class, 'applyPestConfigUpdate');
     $method->setAccessible(true);
 
-    expect($method->invoke($command))->toBe(InstallCommand::FAILURE);
+    expect($method->invoke($step, $ctx))->toBe(InstallCommand::FAILURE);
 });
 
 it('does not insert duplicate E2E phpunit comment when already present', function (): void {
@@ -784,12 +802,22 @@ it('reuses cached Pest.php content in getPestPhp after first read', function ():
     createPestPhp($this->tempDir, "<?php\necho 'v1';\n");
     $command = app(InstallCommand::class);
 
-    $g = new ReflectionMethod(InstallCommand::class, 'getPestPhp');
-    $g->setAccessible(true);
-    expect($g->invoke($command))->toContain('v1');
+    $ctx = new InstallContext(
+        new InstallPlan(false, false, false, false, false, false, false, false, false, false, false, false, false),
+        $command,
+        new ArrayInput([]),
+        new NullOutput,
+        $this->mockJs,
+        false,
+        false,
+        static fn (array $tags, bool $force): int => $command->call('vendor:publish', array_merge(['--tag' => $tags], $force ? ['--force' => true] : [])),
+        static fn (string $name): mixed => $command->option($name),
+    );
+
+    expect($ctx->getPestPhp())->toContain('v1');
 
     file_put_contents($this->tempDir.'/tests/Pest.php', "<?php\necho 'v2';\n");
-    expect($g->invoke($command))->toContain('v1');
+    expect($ctx->getPestPhp())->toContain('v1');
 });
 
 it('merges WSLg headed-mode config into the resolved Sail compose file', function (): void {

@@ -5,17 +5,34 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\Commands;
 
 use Illuminate\Console\Command;
-use Symfony\Component\Process\Process;
-use Symfony\Component\Yaml\Yaml;
-use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
-use ValcuAndrei\PestE2E\Support\CliOptions;
+use ValcuAndrei\PestE2E\Install\InstallContext;
+use ValcuAndrei\PestE2E\Install\InstallPlan;
+use ValcuAndrei\PestE2E\Install\InstallProjectProbe;
+use ValcuAndrei\PestE2E\Install\InstallStep;
+use ValcuAndrei\PestE2E\Install\Steps\AddCsrfExclusionStep;
+use ValcuAndrei\PestE2E\Install\Steps\ConfigurePhpunitStep;
+use ValcuAndrei\PestE2E\Install\Steps\CreateEnvTestingStep;
+use ValcuAndrei\PestE2E\Install\Steps\CreateTestingDatabaseStep;
+use ValcuAndrei\PestE2E\Install\Steps\MergeSailWslgHeadedComposeStep;
+use ValcuAndrei\PestE2E\Install\Steps\PlaywrightInstallStep;
+use ValcuAndrei\PestE2E\Install\Steps\PublishBaseTestCaseStep;
+use ValcuAndrei\PestE2E\Install\Steps\PublishBrowserTestsStep;
+use ValcuAndrei\PestE2E\Install\Steps\PublishConfigStep;
+use ValcuAndrei\PestE2E\Install\Steps\PublishJsHarnessStep;
+use ValcuAndrei\PestE2E\Install\Steps\PublishPlaywrightTestsStep;
+use ValcuAndrei\PestE2E\Install\Steps\RegisterPhpunitExtensionStep;
+use ValcuAndrei\PestE2E\Install\Steps\SyncPhpunitBrowserTestsuiteStep;
+use ValcuAndrei\PestE2E\Install\Steps\UpdatePestConfigStep;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 
+use function Laravel\Prompts\confirm;
+
+/**
+ * Orchestrates `pest-e2e:install`: validates input, resolves {@see InstallPlan} (prompts + flags),
+ * runs {@see InstallStep} instances in order, then prints completion output.
+ */
 final class InstallCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     */
     protected $signature = 'pest-e2e:install'
         .' {--force : Overwrite existing files}'
         .' {--update-pest : Update the Pest config to include the E2ETestCase}'
@@ -36,15 +53,11 @@ final class InstallCommand extends Command
         .' {--no : Answer no to all questions (can be overridden by the individual options)}'
         .' {--unattended : Answer yes to all questions (shortcut for --yes)}';
 
-    /**
-     * The console command description.
-     */
     protected $description = 'Install Pest E2E assets (JS harness + E2ETestCase stub)';
 
-    private ?string $pestPhp = null;
-
-    private ?string $memoizedE2ePackageManagerKey = null;
-
+    /**
+     * @param  JsPackageManager  $jsPackageManager  Resolves JS package manager and runs npm/yarn/pnpm/bun commands.
+     */
     public function __construct(
         private readonly JsPackageManager $jsPackageManager,
     ) {
@@ -52,11 +65,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Execute the console command.
+     * Run the installer: build plan, execute steps, print success message.
      */
     public function handle(): int
     {
-        if (! $this->pestPhpExists()) {
+        if (! file_exists(base_path('tests/Pest.php'))) {
             $this->error('Pest config file not found. Please run "php artisan pest:init" to create it.');
 
             return self::FAILURE;
@@ -79,261 +92,52 @@ final class InstallCommand extends Command
         $force = (bool) $this->option('force');
         $quiet = $this->output->isQuiet();
         $hasPlaywrightInstalled = $this->hasPlaywrightInstalled();
-        // ask all questions at once
-        $publishBaseTestCase = $this->shouldPublishBaseTestCase();
-        $updatePestConfig = $this->shouldUpdatePestConfig();
-        $publishConfig = $this->shouldPublishConfig();
         $installPlaywright = $hasPlaywrightInstalled ? false : $this->shouldInstallPlaywright();
-        $publishJsHarness = $this->shouldPublishJsHarness();
-        $publishJsPlaywright = ($hasPlaywrightInstalled || $installPlaywright) && $this->shouldPublishJsPlaywright();
-        $publishBrowserTests = $this->shouldPublishBrowserTests();
-        $publishPlaywrightTests = $this->shouldPublishPlaywrightTests();
-        $addCsrfExclusion = $this->shouldAddCsrfExclusion();
-        $setupEnvTesting = $this->shouldSetupEnvTesting();
-        $setupTestingDatabase = $this->shouldSetupTestingDatabase();
-        $configurePhpunit = $this->shouldConfigurePhpunit();
-        $mergeSailWslgHeaded = $this->shouldMergeSailWslgHeadedCompose();
 
-        if ($addCsrfExclusion) {
-            if ($this->addCsrfExclusion() === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('CSRF exclusion for pest-e2e auth route added successfully.');
-                }
-            } elseif (! $quiet) {
-                $this->warn('Could not add CSRF exclusion. Add manually: $middleware->validateCsrfTokens(except: [\'/pest-e2e/auth/login\']);');
-            }
-        }
+        $plan = new InstallPlan(
+            addCsrfExclusion: $this->shouldAddCsrfExclusion(),
+            publishBaseTestCase: $this->shouldPublishBaseTestCase(),
+            updatePestConfig: $this->shouldUpdatePestConfig(),
+            publishConfig: $this->shouldPublishConfig(),
+            installPlaywright: $installPlaywright,
+            publishJsHarness: $this->shouldPublishJsHarness(),
+            publishJsPlaywright: ($hasPlaywrightInstalled || $installPlaywright) && $this->shouldPublishJsPlaywright(),
+            publishBrowserTests: $this->shouldPublishBrowserTests(),
+            publishPlaywrightTests: $this->shouldPublishPlaywrightTests(),
+            setupEnvTesting: $this->shouldSetupEnvTesting(),
+            setupTestingDatabase: $this->shouldSetupTestingDatabase(),
+            configurePhpunit: $this->shouldConfigurePhpunit(),
+            mergeSailWslgHeaded: $this->shouldMergeSailWslgHeadedCompose(),
+        );
 
-        if ($publishBaseTestCase) {
-            if ($this->publishBaseTestCase($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('Pest E2E base test case published successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to publish Pest E2E base test case');
-                }
+        $ctx = new InstallContext(
+            $plan,
+            $this,
+            $this->input,
+            $this->output,
+            $this->jsPackageManager,
+            $force,
+            $hasPlaywrightInstalled,
+            fn (array $tags, bool $forcePublish): int => $this->publish($tags, $forcePublish),
+            fn (string $name) => $this->option($name),
+        );
 
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->e2eTestCaseExists()) {
-            $this->info('Pest E2E base test case already published.');
-        }
-
-        if (! $this->pestPhpHasE2ETestCase() && $updatePestConfig) {
-            if ($this->updatePestConfig() === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('Pest config updated successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to update pest config');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->pestPhpHasE2ETestCase()) {
-            $this->info('Pest config already includes E2ETestCase.');
-        }
-
-        if ($publishConfig) {
-            if ($this->publishConfig($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('Pest E2E config published successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to publish Pest E2E config');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->configExists()) {
-            $this->info('Pest E2E config already published.');
-        }
-
-        if ($setupEnvTesting) {
-            if ($this->createEnvTesting($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('.env.testing created successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to create .env.testing');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->envTestingExists()) {
-            $this->info('.env.testing already exists.');
-        }
-
-        if ($setupTestingDatabase) {
-            if ($this->createTestingDatabase($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('database/testing.sqlite created successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to create database/testing.sqlite');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->testingDatabaseExists()) {
-            $this->info('database/testing.sqlite already exists.');
-        }
-
-        if ($configurePhpunit) {
-            if ($this->configurePhpunit($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('phpunit.xml configured for .env.testing.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to configure phpunit.xml');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->phpunitIsConfiguredForEnvTesting()) {
-            $this->info('phpunit.xml already configured for .env.testing.');
-        }
-
-        if ($mergeSailWslgHeaded) {
-            $composePath = $this->resolveComposeFilePath();
-            if ($this->mergeSailWslgHeadedCompose() === self::SUCCESS) {
-                if (! $quiet && is_string($composePath)) {
-                    $this->info('WSLg headed-mode environment and volumes merged into '.basename($composePath).' (laravel.test).');
-                }
-            } elseif (! $quiet) {
-                $this->warn('Could not merge Sail WSLg config. Add the "Headed Mode in Sail" block from README manually to your compose file.');
-            }
-        } elseif (! $quiet && $this->sailProjectDetected() && $this->composeFileHasSailWslgHeadedConfig()) {
-            $this->info('Sail compose file already includes WSLg headed-mode settings.');
-        }
-
-        if ($this->phpunitExtensionIsRegistered()) {
-            if (! $quiet) {
-                $this->info('Pest E2E PHPUnit extension already registered.');
-            }
-        } elseif ($this->registerPhpunitExtension() === self::SUCCESS && ! $quiet) {
-            $this->info('Pest E2E PHPUnit extension registered.');
-        }
-
-        if ($publishBrowserTests) {
-            if ($this->publishBrowserTests($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('Pest E2E browser tests published successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to publish Pest E2E browser tests');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->browserTestsExist()) {
-            $this->info('Pest E2E browser tests already published.');
-        }
-
-        if (($hasPlaywrightInstalled || $installPlaywright) && $publishPlaywrightTests) {
-            if ($this->publishPlaywrightTests($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('Pest E2E Playwright tests published successfully.');
-                }
-            } else {
-                if (! $quiet) {
-                    $this->error('Failed to publish Pest E2E Playwright tests');
-                }
-
-                return self::FAILURE;
-            }
-        } elseif (! $quiet && $this->playwrightTestsExist()) {
-            $this->info('Pest E2E Playwright tests already published.');
-        }
-
-        $publishPlaywrightAdapter = function () use ($force, $quiet, $publishJsPlaywright): int {
-            if ($publishJsPlaywright) {
-                if ($this->publishJsPlaywright($force) === self::SUCCESS) {
-                    if (! $quiet) {
-                        $this->info('Pest E2E JS Playwright published successfully.');
-                    }
-                } else {
-                    if (! $quiet) {
-                        $this->error('Failed to publish Pest E2E JS Playwright');
-                    }
-
+        foreach ($this->installSteps() as $step) {
+            if ($step->shouldRun($ctx)) {
+                $result = $step->run($ctx);
+                if (! $result->ok) {
                     return self::FAILURE;
                 }
-            } elseif (! $quiet && $this->jsPlaywrightExists()) {
-                $this->info('Pest E2E JS Playwright already published.');
-            }
-
-            return self::SUCCESS;
-        }; // we only publish the JS playwright adapter if playwright is installed
-
-        if ($publishJsHarness) {
-            if ($this->publishJsHarness($force) === self::SUCCESS) {
-                if (! $quiet) {
-                    $this->info('Pest E2E JS Harness published successfully.');
-                }
             } else {
-                if (! $quiet) {
-                    $this->error('Failed to publish Pest E2E JS Harness');
-                }
-
-                return self::FAILURE;
+                $step->afterSkipped($ctx);
             }
-        } elseif (! $quiet && $this->jsHarnessExists()) {
-            $this->info('Pest E2E JS Harness already published.');
-        }
-
-        if (! $hasPlaywrightInstalled) {
-            if ($installPlaywright) {
-                if ($this->installPlaywright() === self::SUCCESS) {
-                    if (! $quiet) {
-                        $this->info('Playwright installed successfully.');
-                    }
-
-                    if ($publishPlaywrightAdapter() === self::FAILURE) {
-                        return self::FAILURE;
-                    }
-                } else {
-                    if (! $quiet) {
-                        $this->error('Failed to install Playwright or download browsers (playwright install).');
-                    }
-
-                    return self::FAILURE;
-                }
-            } elseif (! $quiet) {
-                $this->warn($this->playwrightPackage().' is not installed. Install it to run E2E tests:');
-                $this->warn('  npm i -D '.$this->playwrightPackage());
-                $this->warn('  npx playwright install');
-                $this->warn('  php artisan vendor:publish --tag=pest-e2e-js-playwright');
-            }
-        } else {
-            if (! $quiet) {
-                $this->info($this->playwrightPackage().' already installed.');
-            }
-            if ($publishPlaywrightAdapter() === self::FAILURE) {
-                return self::FAILURE;
-            }
-        }
-
-        if (is_file(base_path('phpunit.xml')) && $this->syncPhpunitBrowserTestsuite() === self::FAILURE) {
-            if (! $quiet) {
-                $this->error('Failed to add Browser testsuite to phpunit.xml');
-            }
-
-            return self::FAILURE;
         }
 
         if (! $quiet) {
             $this->info('Pest E2E installed successfully');
             $this->info('There, now you have no excuses to not write E2E tests!');
 
-            if (! $publishJsHarness && ! $this->jsHarnessExists()) {
+            if (! $plan->publishJsHarness && ! InstallProjectProbe::jsHarnessExists()) {
                 $this->info('When you are ready to publish the JS harness, run:');
                 $this->info('  php artisan vendor:publish --tag=pest-e2e-js-harness');
             }
@@ -343,56 +147,32 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Update the Pest config to include the E2ETestCase.
+     * Ordered pipeline of install steps (must match intended side-effect order).
+     *
+     * @return list<InstallStep>
      */
-    private function updatePestConfig(): int
+    private function installSteps(): array
     {
-        $pest = $this->getPestPhp();
-
-        if (! is_string($pest)) {
-            return self::FAILURE;
-        }
-
-        $dbTrait = 'DatabaseMigrations';
-        $dbTraitNamespace = 'Illuminate\Foundation\Testing\\'.$dbTrait;
-
-        if (! str_contains($pest, 'use '.$dbTraitNamespace.';')) {
-            if (preg_match('/^<\?php\s+declare\(strict_types=1\);\s*/', $pest) === 1) {
-                $pest = preg_replace(
-                    '/^<\?php\s+declare\(strict_types=1\);\s*/',
-                    "<?php\n\ndeclare(strict_types=1);\n\nuse {$dbTraitNamespace};\n\n",
-                    $pest,
-                    1
-                ) ?? $pest;
-            } else {
-                $pest = preg_replace(
-                    '/^<\?php\s*/',
-                    "<?php\n\nuse {$dbTraitNamespace};\n\n",
-                    $pest,
-                    1
-                ) ?? $pest;
-            }
-        }
-
-        $pest = preg_replace('/\?>\s*$/', '', $pest) ?? $pest;
-
-        $pest .= "\n\npest()->extend(Tests\\E2ETestCase::class)\n"
-            .'    ->use('.$dbTrait."::class)\n"
-            ."    ->in('Browser');\n";
-
-        if (file_put_contents($this->pestPhpPath(), $pest) === false) {
-            return self::FAILURE;
-        }
-
-        $this->pestPhp = $pest;
-
-        return self::SUCCESS;
+        return [
+            new AddCsrfExclusionStep,
+            new PublishBaseTestCaseStep,
+            new UpdatePestConfigStep,
+            new PublishConfigStep,
+            new CreateEnvTestingStep,
+            new CreateTestingDatabaseStep,
+            new ConfigurePhpunitStep,
+            new MergeSailWslgHeadedComposeStep,
+            new RegisterPhpunitExtensionStep,
+            new PublishBrowserTestsStep,
+            new PublishPlaywrightTestsStep,
+            new PublishJsHarnessStep,
+            new PlaywrightInstallStep,
+            new SyncPhpunitBrowserTestsuiteStep,
+        ];
     }
 
     /**
-     * Publish the Pest E2E JS assets.
-     *
-     * @param  array<string>  $tags
+     * @param  array<string>  $tags  Vendor publish tags (e.g. pest-e2e-config).
      */
     private function publish(array $tags, bool $force = false): int
     {
@@ -402,442 +182,23 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Publish the Pest E2E config.
-     */
-    private function publishConfig(bool $force = false): int
-    {
-        return $this->publish(['pest-e2e-config'], $force);
-    }
-
-    /**
-     * Publish the Pest E2E base test case.
-     */
-    private function publishBaseTestCase(bool $force = false): int
-    {
-        $result = $this->publish(['pest-e2e-test-case'], $force);
-
-        if ($result === self::SUCCESS) {
-            $this->injectPackageManagerIntoE2ETestCase();
-        }
-
-        return $result;
-    }
-
-    /**
-     * Inject the detected package manager into the published E2ETestCase.
-     */
-    private function injectPackageManagerIntoE2ETestCase(): void
-    {
-        $path = base_path('tests/E2ETestCase.php');
-        if (! is_file($path)) {
-            return;
-        }
-
-        $content = file_get_contents($path);
-        if ($content === false) {
-            return;
-        }
-
-        $detected = $this->e2ePackageManagerKey();
-        $content = str_replace('{{PACKAGE_MANAGER}}', $detected, $content);
-
-        file_put_contents($path, $content);
-    }
-
-    /**
-     * Single resolved package manager for this install run (stub injection + Playwright install).
-     */
-    private function e2ePackageManagerKey(): string
-    {
-        if ($this->memoizedE2ePackageManagerKey !== null) {
-            return $this->memoizedE2ePackageManagerKey;
-        }
-
-        return $this->memoizedE2ePackageManagerKey = $this->resolvePackageManagerKeyForE2EStub();
-    }
-
-    /**
-     * Resolve package manager for E2ETestCase stub: prefer installed binaries
-     * ({@see JsPackageManager::getAvailablePackageManagers()}), prompt when
-     * several exist, else fall back to lockfile-only detection.
-     */
-    private function resolvePackageManagerKeyForE2EStub(): string
-    {
-        $forced = $this->option('package-manager');
-        if (is_string($forced) && $forced !== '') {
-            return $forced;
-        }
-
-        $available = $this->jsPackageManager->getAvailablePackageManagers();
-
-        if ($available === []) {
-            return $this->jsPackageManager->defaultPackageManagerKeyFromLockfiles();
-        }
-
-        $ordered = $this->orderPackageManagerKeysByRegistration($available);
-
-        if (count($ordered) === 1) {
-            return $ordered[0];
-        }
-
-        $lockfileChoice = $this->jsPackageManager->defaultPackageManagerKeyFromLockfiles();
-
-        if ($this->input->isInteractive()) {
-            $default = in_array($lockfileChoice, $ordered, true) ? $lockfileChoice : $ordered[0];
-
-            /** @var string */
-            return $this->choice(
-                'Which package manager should Pest E2E use for JS / Playwright commands?',
-                $ordered,
-                $default
-            );
-        }
-
-        if (in_array($lockfileChoice, $ordered, true)) {
-            return $lockfileChoice;
-        }
-
-        return $ordered[0];
-    }
-
-    /**
-     * @param  array<string>  $keys
-     * @return list<string>
-     */
-    private function orderPackageManagerKeysByRegistration(array $keys): array
-    {
-        $want = array_flip($keys);
-        $ordered = [];
-        foreach ($this->jsPackageManager->packageManagerKeysInRegistrationOrder() as $key) {
-            if (isset($want[$key])) {
-                $ordered[] = $key;
-            }
-        }
-
-        foreach ($keys as $key) {
-            if (! in_array($key, $ordered, true)) {
-                $ordered[] = $key;
-            }
-        }
-
-        return $ordered;
-    }
-
-    /**
-     * Publish the Pest E2E JS harness.
-     */
-    private function publishJsHarness(bool $force = false): int
-    {
-        return $this->publish(['pest-e2e-js-harness'], $force);
-    }
-
-    /**
-     * Publish the Pest E2E JS Playwright.
-     */
-    private function publishJsPlaywright(bool $force = false): int
-    {
-        return $this->publish(['pest-e2e-js-playwright'], $force);
-    }
-
-    /**
-     * Publish the Pest E2E browser tests.
-     */
-    private function publishBrowserTests(bool $force = false): int
-    {
-        return $this->publish(['pest-e2e-browser-tests'], $force);
-    }
-
-    /**
-     * Publish the Pest E2E Playwright tests.
-     */
-    private function publishPlaywrightTests(bool $force = false): int
-    {
-        return $this->publish(['pest-e2e-playwright-tests'], $force);
-    }
-
-    /**
-     * Check if Playwright is installed.
+     * Whether `@playwright/test` is present in package.json / node_modules.
      */
     private function hasPlaywrightInstalled(): bool
     {
-        if ($this->jsPackageManager->hasJsAnyDependency($this->playwrightPackage())) {
+        $pkg = '@playwright/test';
+
+        if ($this->jsPackageManager->hasJsAnyDependency($pkg)) {
             return true;
         }
 
-        return $this->jsPackageManager->hasJsPackageInstalled($this->playwrightPackage());
+        return $this->jsPackageManager->hasJsPackageInstalled($pkg);
     }
 
     /**
-     * Get the Playwright package name.
-     */
-    private function playwrightPackage(): string
-    {
-        return '@playwright/test';
-    }
-
-    /**
-     * Install Playwright.
-     */
-    private function installPlaywright(): int
-    {
-        $previousCliPm = CliOptions::$packageManager;
-        CliOptions::$packageManager = $this->e2ePackageManagerKey();
-
-        try {
-            $tty = Process::isTtySupported() && $this->input->isInteractive() && ! (bool) $this->option('unattended');
-
-            $out = function (string $type, string $buffer): void {
-                $this->output->write($buffer);
-            };
-
-            $process = $this->jsPackageManager->installJsPackage(
-                package: $this->playwrightPackage(),
-                dev: true,
-                tty: $tty,
-                outputCallback: $out,
-            );
-
-            if (! $process || ! $process->isSuccessful()) {
-                return self::FAILURE;
-            }
-
-            $browsers = $this->jsPackageManager->runLocalOrDlxBinary('playwright', ['install'], $tty, $out);
-            if (! $browsers || ! $browsers->isSuccessful()) {
-                return self::FAILURE;
-            }
-
-            return self::SUCCESS;
-        } finally {
-            CliOptions::$packageManager = $previousCliPm;
-        }
-    }
-
-    /**
-     * Get the Pest PHP path.
-     */
-    private function pestPhpPath(): string
-    {
-        return base_path('tests/Pest.php');
-    }
-
-    /**
-     * Check if the Pest PHP file exists.
-     */
-    private function pestPhpExists(): bool
-    {
-        return file_exists($this->pestPhpPath());
-    }
-
-    /**
-     * Check if the E2ETestCase.php has been published.
-     */
-    private function e2eTestCaseExists(): bool
-    {
-        return is_file(base_path('tests/E2ETestCase.php'));
-    }
-
-    /**
-     * Check if the pest-e2e config has been published.
-     */
-    private function configExists(): bool
-    {
-        return is_file(config_path('pest-e2e.php'));
-    }
-
-    /**
-     * Check if the JS harness has been published.
-     */
-    private function jsHarnessExists(): bool
-    {
-        return is_file(resource_path('js/pest-e2e/core.mjs'));
-    }
-
-    /**
-     * Check if the JS Playwright adapter has been published.
-     */
-    private function jsPlaywrightExists(): bool
-    {
-        return is_file(resource_path('js/pest-e2e/playwright.mjs'));
-    }
-
-    /**
-     * Check if the browser tests have been published.
-     */
-    private function browserTestsExist(): bool
-    {
-        return is_dir(base_path('tests/Browser'));
-    }
-
-    /**
-     * Check if the Playwright tests have been published.
-     */
-    private function playwrightTestsExist(): bool
-    {
-        return is_dir(resource_path('js/e2e'));
-    }
-
-    /**
-     * Check if .env.testing exists.
-     */
-    private function envTestingExists(): bool
-    {
-        return is_file(base_path('.env.testing'));
-    }
-
-    /**
-     * Check if database/testing.sqlite exists.
-     */
-    private function testingDatabaseExists(): bool
-    {
-        return is_file(base_path('database/testing.sqlite'));
-    }
-
-    /**
-     * Load phpunit.xml as DOMDocument.
-     */
-    private function loadPhpunitXml(string $path): ?\DOMDocument
-    {
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        $dom->preserveWhiteSpace = false;
-        $dom->formatOutput = true;
-
-        if (@$dom->load($path) === false) {
-            return null;
-        }
-
-        return $dom;
-    }
-
-    /**
-     * Save DOMDocument to phpunit.xml.
-     */
-    private function savePhpunitXml(\DOMDocument $dom, string $path): bool
-    {
-        return $dom->save($path) !== false;
-    }
-
-    /**
-     * Check if phpunit.xml has DB/cache env vars commented out (so .env.testing controls them).
-     */
-    private function phpunitIsConfiguredForEnvTesting(): bool
-    {
-        $path = base_path('phpunit.xml');
-        if (! is_file($path)) {
-            return false;
-        }
-
-        $dom = $this->loadPhpunitXml($path);
-        if (! $dom instanceof \DOMDocument) {
-            return false;
-        }
-
-        $xpath = new \DOMXPath($dom);
-        $varsToCheck = ['DB_CONNECTION', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER'];
-
-        foreach ($varsToCheck as $var) {
-            $nodes = $xpath->query("//php/env[@name='{$var}']");
-            if ($nodes !== false && $nodes->length > 0) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Check if the Pest E2E PHPUnit extension is registered in phpunit.xml.
-     */
-    private function phpunitExtensionIsRegistered(): bool
-    {
-        $path = base_path('phpunit.xml');
-        if (! is_file($path)) {
-            return false;
-        }
-
-        $dom = $this->loadPhpunitXml($path);
-        if (! $dom instanceof \DOMDocument) {
-            return false;
-        }
-
-        $xpath = new \DOMXPath($dom);
-        $nodes = $xpath->query("//extensions/bootstrap[@class='ValcuAndrei\\PestE2E\\PHPUnit\\PestE2EPhpunitExtension']");
-
-        return $nodes !== false && $nodes->length > 0;
-    }
-
-    /**
-     * Register the Pest E2E PHPUnit extension in phpunit.xml.
-     */
-    private function registerPhpunitExtension(): int
-    {
-        $path = base_path('phpunit.xml');
-        if (! is_file($path)) {
-            return self::SUCCESS;
-        }
-
-        if ($this->phpunitExtensionIsRegistered()) {
-            return self::SUCCESS;
-        }
-
-        $dom = $this->loadPhpunitXml($path);
-        if (! $dom instanceof \DOMDocument) {
-            return self::FAILURE;
-        }
-
-        $root = $dom->documentElement;
-        if (! $root instanceof \DOMElement) {
-            return self::FAILURE;
-        }
-
-        $extensions = $dom->getElementsByTagName('extensions')->item(0);
-
-        if ($extensions !== null) {
-            $bootstrap = $dom->createElement('bootstrap');
-            $bootstrap->setAttribute('class', PestE2EPhpunitExtension::class);
-            $extensions->appendChild($bootstrap);
-        } else {
-            $extensions = $dom->createElement('extensions');
-            $bootstrap = $dom->createElement('bootstrap');
-            $bootstrap->setAttribute('class', PestE2EPhpunitExtension::class);
-            $extensions->appendChild($bootstrap);
-            $root->appendChild($extensions);
-        }
-
-        return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Get the Pest PHP file content.
-     */
-    private function getPestPhp(): ?string
-    {
-        if ($this->pestPhp !== null) {
-            return $this->pestPhp;
-        }
-
-        $path = $this->pestPhpPath();
-        $content = $this->pestPhpExists() ? file_get_contents($path) : false;
-        $this->pestPhp = $content !== false ? $content : null;
-
-        return $this->pestPhp;
-    }
-
-    /**
-     * Check if the Pest PHP file has the E2ETestCase.
-     */
-    private function pestPhpHasE2ETestCase(): bool
-    {
-        $pest = $this->getPestPhp();
-
-        if (! is_string($pest)) {
-            return false;
-        }
-
-        return str_contains($pest, 'E2ETestCase::class');
-    }
-
-    /**
-     * Should accept the flag.
+     * Resolve a yes/no for an install feature: explicit CLI flag, --yes/--no/--unattended, non-interactive default, or Laravel Prompts `confirm`.
+     *
+     * @param  string  $flag  Option name without leading dashes (e.g. `publish-config`).
      */
     private function shouldAccept(string $flag, string $message, bool $default = true): bool
     {
@@ -854,11 +215,11 @@ final class InstallCommand extends Command
             return false;
         }
 
-        return $this->confirm($message, $default);
+        return confirm($message, $default);
     }
 
     /**
-     * Should update the Pest config.
+     * Whether to offer updating `tests/Pest.php` for E2ETestCase.
      */
     private function shouldUpdatePestConfig(): bool
     {
@@ -866,11 +227,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should publish the Pest E2E config.
+     * Whether to publish `pest-e2e` config (skip prompt if already published unless flag set).
      */
     private function shouldPublishConfig(): bool
     {
-        if ($this->configExists() && ! $this->hasOptionFlag('publish-config')) {
+        if (InstallProjectProbe::configExists() && ! $this->hasOptionFlag('publish-config')) {
             return false;
         }
 
@@ -878,11 +239,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should publish the Pest E2E base test case.
+     * Whether to publish the E2ETestCase stub.
      */
     private function shouldPublishBaseTestCase(): bool
     {
-        if ($this->e2eTestCaseExists() && ! $this->hasOptionFlag('publish-base-test-case')) {
+        if (InstallProjectProbe::e2eTestCaseExists() && ! $this->hasOptionFlag('publish-base-test-case')) {
             return false;
         }
 
@@ -890,11 +251,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should publish the Pest E2E JS harness.
+     * Whether to publish the JS harness assets.
      */
     private function shouldPublishJsHarness(): bool
     {
-        if ($this->jsHarnessExists() && ! $this->hasOptionFlag('publish-js-harness')) {
+        if (InstallProjectProbe::jsHarnessExists() && ! $this->hasOptionFlag('publish-js-harness')) {
             return false;
         }
 
@@ -902,11 +263,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should publish the Pest E2E JS Playwright.
+     * Whether to publish the JS Playwright adapter.
      */
     private function shouldPublishJsPlaywright(): bool
     {
-        if ($this->jsPlaywrightExists() && ! $this->hasOptionFlag('publish-js-playwright')) {
+        if (InstallProjectProbe::jsPlaywrightExists() && ! $this->hasOptionFlag('publish-js-playwright')) {
             return false;
         }
 
@@ -914,11 +275,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should publish the Pest E2E browser tests.
+     * Whether to publish starter Browser suite stubs.
      */
     private function shouldPublishBrowserTests(): bool
     {
-        if ($this->browserTestsExist() && ! $this->hasOptionFlag('publish-browser-tests')) {
+        if (InstallProjectProbe::browserTestsExist() && ! $this->hasOptionFlag('publish-browser-tests')) {
             return false;
         }
 
@@ -926,11 +287,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should publish the Pest E2E Playwright tests.
+     * Whether to publish starter Playwright JS tests.
      */
     private function shouldPublishPlaywrightTests(): bool
     {
-        if ($this->playwrightTestsExist() && ! $this->hasOptionFlag('publish-playwright-tests')) {
+        if (InstallProjectProbe::playwrightTestsExist() && ! $this->hasOptionFlag('publish-playwright-tests')) {
             return false;
         }
 
@@ -938,7 +299,7 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should install Playwright.
+     * Whether to install `@playwright/test` and download browsers (when not already installed).
      */
     private function shouldInstallPlaywright(): bool
     {
@@ -946,7 +307,7 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should add CSRF exclusion for pest-e2e auth route.
+     * Whether to patch `bootstrap/app.php` for pest-e2e auth CSRF exclusion.
      */
     private function shouldAddCsrfExclusion(): bool
     {
@@ -954,11 +315,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should create .env.testing.
+     * Whether to create `.env.testing` from `.env`.
      */
     private function shouldSetupEnvTesting(): bool
     {
-        if ($this->envTestingExists() && ! $this->hasOptionFlag('setup-env-testing')) {
+        if (InstallProjectProbe::envTestingExists() && ! $this->hasOptionFlag('setup-env-testing')) {
             return false;
         }
 
@@ -966,11 +327,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should create database/testing.sqlite.
+     * Whether to create `database/testing.sqlite`.
      */
     private function shouldSetupTestingDatabase(): bool
     {
-        if ($this->testingDatabaseExists() && ! $this->hasOptionFlag('setup-testing-database')) {
+        if (InstallProjectProbe::testingDatabaseExists() && ! $this->hasOptionFlag('setup-testing-database')) {
             return false;
         }
 
@@ -978,11 +339,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Should configure phpunit.xml to let .env.testing control DB/cache.
+     * Whether to comment DB/cache env vars in `phpunit.xml` for `.env.testing` control.
      */
     private function shouldConfigurePhpunit(): bool
     {
-        if ($this->phpunitIsConfiguredForEnvTesting() && ! $this->hasOptionFlag('configure-phpunit')) {
+        if (InstallProjectProbe::phpunitIsConfiguredForEnvTesting() && ! $this->hasOptionFlag('configure-phpunit')) {
             return false;
         }
 
@@ -990,15 +351,15 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Merge README WSLg headed-mode snippets into the Sail laravel.test service.
+     * Whether to merge WSLg display/volume settings into the Sail `laravel.test` compose service.
      */
     private function shouldMergeSailWslgHeadedCompose(): bool
     {
-        if (! $this->sailProjectDetected()) {
+        if (! InstallProjectProbe::sailProjectDetected()) {
             return false;
         }
 
-        if ($this->composeFileHasSailWslgHeadedConfig()) {
+        if (InstallProjectProbe::composeFileHasSailWslgHeadedConfig()) {
             return false;
         }
 
@@ -1010,578 +371,7 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Docker Compose default filename order (first existing file wins).
-     */
-    private function resolveComposeFilePath(): ?string
-    {
-        foreach (['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'] as $name) {
-            $path = base_path($name);
-            if (is_file($path)) {
-                return $path;
-            }
-        }
-
-        return null;
-    }
-
-    private function composerDeclaresLaravelSail(): bool
-    {
-        $path = base_path('composer.json');
-        if (! is_file($path)) {
-            return false;
-        }
-
-        $json = file_get_contents($path);
-        if ($json === false) {
-            return false;
-        }
-
-        try {
-            /** @var mixed $data */
-            $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return false;
-        }
-
-        if (! is_array($data)) {
-            return false;
-        }
-
-        foreach (['require', 'require-dev'] as $section) {
-            if (! isset($data[$section])) {
-                continue;
-            }
-            if (! is_array($data[$section])) {
-                continue;
-            }
-            if (array_key_exists('laravel/sail', $data[$section])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function sailProjectDetected(): bool
-    {
-        $composePath = $this->resolveComposeFilePath();
-        if ($composePath === null) {
-            return false;
-        }
-
-        if (! is_dir(base_path('vendor/laravel/sail')) && ! $this->composerDeclaresLaravelSail()) {
-            return false;
-        }
-
-        try {
-            $data = Yaml::parseFile($composePath);
-        } catch (\Throwable) {
-            return false;
-        }
-
-        if (! is_array($data)) {
-            return false;
-        }
-
-        $services = $data['services'] ?? null;
-        if (! is_array($services)) {
-            return false;
-        }
-
-        $laravelTest = $services['laravel.test'] ?? null;
-
-        return is_array($laravelTest);
-    }
-
-    private function composeFileHasSailWslgHeadedConfig(): bool
-    {
-        $composePath = $this->resolveComposeFilePath();
-        if ($composePath === null || ! is_readable($composePath)) {
-            return false;
-        }
-
-        try {
-            $data = Yaml::parseFile($composePath);
-        } catch (\Throwable) {
-            return false;
-        }
-
-        if (! is_array($data)) {
-            return false;
-        }
-
-        $services = $data['services'] ?? null;
-        if (! is_array($services)) {
-            return false;
-        }
-
-        $service = $services['laravel.test'] ?? null;
-        if (! is_array($service)) {
-            return false;
-        }
-
-        return $this->serviceHasWslgEnvironment($service)
-            && $this->serviceHasWslgVolumes($service);
-    }
-
-    /**
-     * @param  array<mixed>  $service
-     */
-    private function serviceHasWslgEnvironment(array $service): bool
-    {
-        $keys = ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'PULSE_SERVER'];
-        $env = $service['environment'] ?? null;
-        if (! is_array($env)) {
-            return false;
-        }
-
-        if ($env !== [] && array_is_list($env)) {
-            foreach ($keys as $key) {
-                $found = false;
-                foreach ($env as $entry) {
-                    if (! is_string($entry)) {
-                        continue;
-                    }
-                    $trimmed = trim($entry);
-                    if (str_starts_with($trimmed, $key.'=') || str_starts_with($trimmed, $key.':')) {
-                        $found = true;
-                        break;
-                    }
-                }
-                if (! $found) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        foreach ($keys as $key) {
-            if (! array_key_exists($key, $env)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * @param  array<mixed>  $service
-     */
-    private function serviceHasWslgVolumes(array $service): bool
-    {
-        $required = ['/mnt/wslg:/mnt/wslg', '/tmp/.X11-unix:/tmp/.X11-unix'];
-        $volumes = $service['volumes'] ?? null;
-        if (! is_array($volumes) || ! array_is_list($volumes)) {
-            return false;
-        }
-
-        foreach ($required as $mount) {
-            if (! in_array($mount, $volumes, true)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * @param  array<mixed>  $env
-     * @return array<mixed>
-     */
-    private function mergeWslgEnvironment(array $env): array
-    {
-        $wslg = [
-            'DISPLAY' => '${DISPLAY}',
-            'WAYLAND_DISPLAY' => '${WAYLAND_DISPLAY}',
-            'XDG_RUNTIME_DIR' => '${XDG_RUNTIME_DIR}',
-            'PULSE_SERVER' => '${PULSE_SERVER}',
-        ];
-
-        if ($env !== [] && array_is_list($env)) {
-            $out = $env;
-            foreach ($wslg as $key => $value) {
-                $found = false;
-                foreach ($env as $entry) {
-                    if (! is_string($entry)) {
-                        continue;
-                    }
-                    $trimmed = trim($entry);
-                    if (str_starts_with($trimmed, $key.'=') || str_starts_with($trimmed, $key.':')) {
-                        $found = true;
-                        break;
-                    }
-                }
-                if (! $found) {
-                    $out[] = $key.'='.$value;
-                }
-            }
-
-            return $out;
-        }
-
-        foreach ($wslg as $key => $value) {
-            if (! array_key_exists($key, $env)) {
-                $env[$key] = $value;
-            }
-        }
-
-        return $env;
-    }
-
-    /**
-     * @param  list<mixed>  $volumes
-     * @return list<string>
-     */
-    private function mergeWslgVolumes(array $volumes): array
-    {
-        $extra = ['/mnt/wslg:/mnt/wslg', '/tmp/.X11-unix:/tmp/.X11-unix'];
-        $out = [];
-        foreach ($volumes as $v) {
-            if (is_string($v)) {
-                $out[] = $v;
-            }
-        }
-        foreach ($extra as $mount) {
-            if (! in_array($mount, $out, true)) {
-                $out[] = $mount;
-            }
-        }
-
-        return $out;
-    }
-
-    private function mergeSailWslgHeadedCompose(): int
-    {
-        $path = $this->resolveComposeFilePath();
-        if ($path === null) {
-            return self::FAILURE;
-        }
-
-        $raw = file_get_contents($path);
-        if ($raw === false) {
-            return self::FAILURE;
-        }
-
-        try {
-            $data = Yaml::parse($raw);
-        } catch (\Throwable) {
-            return self::FAILURE;
-        }
-
-        if (! is_array($data)) {
-            return self::FAILURE;
-        }
-
-        $services = $data['services'] ?? null;
-        if (! is_array($services)) {
-            return self::FAILURE;
-        }
-
-        $service = $services['laravel.test'] ?? null;
-        if (! is_array($service)) {
-            return self::FAILURE;
-        }
-
-        $env = $service['environment'] ?? [];
-        if (! is_array($env)) {
-            return self::FAILURE;
-        }
-        $service['environment'] = $this->mergeWslgEnvironment($env);
-
-        $volumes = $service['volumes'] ?? [];
-        if (! is_array($volumes) || ($volumes !== [] && ! array_is_list($volumes))) {
-            return self::FAILURE;
-        }
-        $listVolumes = $volumes;
-        $merged = $this->mergeWslgVolumes($listVolumes);
-        $service['volumes'] = $merged;
-
-        $services['laravel.test'] = $service;
-        $data['services'] = $services;
-
-        $flags = Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE;
-        $dumped = Yaml::dump($data, 8, 4, $flags);
-        if ($dumped === '' || $dumped === '0') {
-            return self::FAILURE;
-        }
-
-        return file_put_contents($path, $dumped) !== false ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Create .env.testing from .env with E2E-appropriate overrides.
-     */
-    private function createEnvTesting(bool $force = false): int
-    {
-        $path = base_path('.env.testing');
-        if (is_file($path) && ! $force) {
-            return self::SUCCESS;
-        }
-
-        $envPath = base_path('.env');
-        if (! is_file($envPath)) {
-            if (! $this->output->isQuiet()) {
-                $this->warn('.env file not found. Skipping .env.testing creation. Run php artisan key:generate first.');
-            }
-
-            return self::SUCCESS;
-        }
-
-        $content = file_get_contents($envPath);
-        if ($content === false) {
-            return self::FAILURE;
-        }
-
-        $overrides = [
-            'APP_ENV' => 'testing',
-            'APP_URL' => 'http://127.0.0.1',
-            'DB_CONNECTION' => 'sqlite',
-            'DB_DATABASE' => 'testing',
-            'CACHE_STORE' => 'database',
-            'SESSION_DRIVER' => 'database',
-            'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
-        ];
-
-        $lines = preg_split('/\r\n|\r|\n/', $content);
-        if ($lines === false) {
-            return self::FAILURE;
-        }
-
-        $result = [];
-        $seen = [];
-
-        foreach ($lines as $line) {
-            $trimmed = trim($line);
-            if ($trimmed === '' || str_starts_with($trimmed, '#')) {
-                $result[] = $line;
-
-                continue;
-            }
-
-            if (preg_match('/^([A-Za-z_]\w*)=(.*)$/', $trimmed, $m) === 1) {
-                $key = $m[1];
-                $seen[$key] = true;
-                if (array_key_exists($key, $overrides)) {
-                    $result[] = $key.'='.$overrides[$key];
-
-                    continue;
-                }
-            }
-
-            $result[] = $line;
-        }
-
-        foreach ($overrides as $key => $value) {
-            if (! isset($seen[$key])) {
-                $result[] = $key.'='.$value;
-            }
-        }
-
-        $output = implode("\n", $result);
-
-        return file_put_contents($path, $output) !== false ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Create database/testing.sqlite for SQLite tests.
-     */
-    private function createTestingDatabase(bool $force = false): int
-    {
-        $path = base_path('database/testing.sqlite');
-        if (is_file($path) && ! $force) {
-            return self::SUCCESS;
-        }
-
-        $dir = dirname($path);
-        if (! is_dir($dir) && ! @mkdir($dir, 0755, true) && ! is_dir($dir)) {
-            return self::FAILURE;
-        }
-
-        return touch($path) ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Comment out DB/cache env vars in phpunit.xml so .env.testing controls them.
-     */
-    private function configurePhpunit(bool $force = false): int
-    {
-        $path = base_path('phpunit.xml');
-        if (! is_file($path)) {
-            return self::FAILURE;
-        }
-
-        if ($this->phpunitIsConfiguredForEnvTesting() && ! $force) {
-            return self::SUCCESS;
-        }
-
-        $dom = $this->loadPhpunitXml($path);
-        if (! $dom instanceof \DOMDocument) {
-            return self::FAILURE;
-        }
-
-        $xpath = new \DOMXPath($dom);
-        $varsToComment = ['DB_CONNECTION', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER'];
-
-        foreach ($varsToComment as $var) {
-            $nodes = $xpath->query("//php/env[@name='{$var}']");
-            if ($nodes === false) {
-                continue;
-            }
-            foreach ($nodes as $env) {
-                if (! $env instanceof \DOMElement) {
-                    continue;
-                }
-                $xml = $dom->saveXML($env);
-                if ($xml === false) {
-                    continue;
-                }
-                $comment = $dom->createComment(' '.trim($xml).' ');
-                $parent = $env->parentNode;
-                if ($parent instanceof \DOMNode) {
-                    $parent->replaceChild($comment, $env);
-                }
-            }
-        }
-
-        $phpNodes = $dom->getElementsByTagName('php');
-        $php = $phpNodes->item(0);
-        if ($php !== null) {
-            $hasE2EComment = false;
-            foreach ($php->childNodes as $child) {
-                if ($child instanceof \DOMComment && str_contains($child->data, 'E2E: Omit')) {
-                    $hasE2EComment = true;
-                    break;
-                }
-            }
-            if (! $hasE2EComment) {
-                $e2eComment = $dom->createComment(' E2E: Omit DB/cache env so .env.testing controls them (required for auth ticket sharing) ');
-                $php->insertBefore($e2eComment, $php->firstChild);
-            }
-        }
-
-        return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Ensure phpunit.xml includes a testsuite for Pest E2E (tests/Browser).
-     */
-    private function syncPhpunitBrowserTestsuite(): int
-    {
-        $path = base_path('phpunit.xml');
-        if (! is_file($path)) {
-            return self::SUCCESS;
-        }
-
-        $dom = $this->loadPhpunitXml($path);
-        if (! $dom instanceof \DOMDocument) {
-            return self::FAILURE;
-        }
-
-        if ($this->phpunitBrowserTestsuiteConfigured($dom)) {
-            return self::SUCCESS;
-        }
-
-        $this->ensurePhpunitBrowserTestsuiteOnDom($dom);
-
-        return $this->savePhpunitXml($dom, $path) ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Whether phpunit.xml already references tests/Browser.
-     */
-    private function phpunitBrowserTestsuiteConfigured(\DOMDocument $dom): bool
-    {
-        $xpath = new \DOMXPath($dom);
-        $nodes = $xpath->query('//testsuite/directory');
-        if ($nodes === false) {
-            return false;
-        }
-
-        foreach ($nodes as $node) {
-            if ($node instanceof \DOMElement && trim($node->textContent) === 'tests/Browser') {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Append a Browser testsuite for tests/Browser if missing.
-     */
-    private function ensurePhpunitBrowserTestsuiteOnDom(\DOMDocument $dom): void
-    {
-        if ($this->phpunitBrowserTestsuiteConfigured($dom)) {
-            return;
-        }
-
-        $root = $dom->documentElement;
-        if (! $root instanceof \DOMElement) {
-            return;
-        }
-
-        $xpath = new \DOMXPath($dom);
-        $testsuitesNodes = $xpath->query('./testsuites', $root);
-        $testsuites = ($testsuitesNodes !== false && $testsuitesNodes->length > 0)
-            ? $testsuitesNodes->item(0)
-            : null;
-
-        if (! $testsuites instanceof \DOMElement) {
-            $testsuites = $dom->createElement('testsuites');
-            $insertBefore = null;
-            foreach ($root->childNodes as $child) {
-                if ($child->nodeType === XML_ELEMENT_NODE) {
-                    $insertBefore = $child;
-
-                    break;
-                }
-            }
-            if ($insertBefore instanceof \DOMNode) {
-                $root->insertBefore($testsuites, $insertBefore);
-            } else {
-                $root->appendChild($testsuites);
-            }
-        }
-
-        $suite = $dom->createElement('testsuite');
-        $suite->setAttribute('name', 'Browser');
-        $suite->appendChild($dom->createElement('directory', 'tests/Browser'));
-        $testsuites->appendChild($suite);
-    }
-
-    /**
-     * Add the pest-e2e auth route to CSRF exclusion in bootstrap/app.php.
-     */
-    private function addCsrfExclusion(): int
-    {
-        $path = base_path('bootstrap/app.php');
-        if (! is_file($path)) {
-            return self::FAILURE;
-        }
-        $content = file_get_contents($path);
-        if ($content === false) {
-            return self::FAILURE;
-        }
-        $exclusion = "validateCsrfTokens(except: ['/pest-e2e/auth/login'])";
-        if (str_contains($content, $exclusion) || str_contains($content, 'pest-e2e/auth/login')) {
-            return self::SUCCESS;
-        }
-        $newContent = preg_replace(
-            '/(\$middleware->encryptCookies\([^)]+\);)/',
-            '$1'."\n        \$middleware->".$exclusion.';',
-            $content,
-            1
-        );
-        if ($newContent === null || $newContent === $content) {
-            return self::FAILURE;
-        }
-
-        return file_put_contents($path, $newContent) !== false ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * Has option flag.
+     * Whether the raw argv contains `--{name}` (for flags not exposed as Laravel options).
      */
     private function hasOptionFlag(string $name): bool
     {
