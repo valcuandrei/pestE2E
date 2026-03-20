@@ -8,6 +8,7 @@ use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use ValcuAndrei\PestE2E\Commands\InstallCommand;
 use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 use ValcuAndrei\PestE2E\Tests\Support\FakePublishCommand;
 use ValcuAndrei\PestE2E\Tests\Support\MockJsPackageManager;
@@ -161,6 +162,21 @@ it('fails when tests/Pest.php is missing', function (): void {
 
     expect($exitCode)->toBe(InstallCommand::FAILURE)
         ->and($output->fetch())->toContain('Pest config file not found');
+});
+
+it('restores CliOptions package manager after Playwright install', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    createBootstrapAppWithEncryptCookies($this->tempDir);
+    CliOptions::$packageManager = 'yarn';
+
+    $exitCode = runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction'],
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and(CliOptions::$packageManager)->toBe('yarn');
 });
 
 it('updates Pest.php and publishes when --yes and Playwright not installed', function (): void {

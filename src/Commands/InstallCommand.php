@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 use ValcuAndrei\PestE2E\PHPUnit\PestE2EPhpunitExtension;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 
 final class InstallCommand extends Command
@@ -41,6 +42,8 @@ final class InstallCommand extends Command
     protected $description = 'Install Pest E2E assets (JS harness + E2ETestCase stub)';
 
     private ?string $pestPhp = null;
+
+    private ?string $memoizedE2ePackageManagerKey = null;
 
     public function __construct(
         private readonly JsPackageManager $jsPackageManager,
@@ -442,6 +445,18 @@ final class InstallCommand extends Command
     }
 
     /**
+     * Single resolved package manager for this install run (stub injection + Playwright install).
+     */
+    private function e2ePackageManagerKey(): string
+    {
+        if ($this->memoizedE2ePackageManagerKey !== null) {
+            return $this->memoizedE2ePackageManagerKey;
+        }
+
+        return $this->memoizedE2ePackageManagerKey = $this->resolvePackageManagerKeyForE2EStub();
+    }
+
+    /**
      * Resolve package manager for E2ETestCase stub: prefer installed binaries
      * ({@see JsPackageManager::getAvailablePackageManagers()}), prompt when
      * several exist, else fall back to lockfile-only detection.
@@ -565,18 +580,25 @@ final class InstallCommand extends Command
      */
     private function installPlaywright(): int
     {
-        $tty = Process::isTtySupported() && $this->input->isInteractive() && ! (bool) $this->option('unattended');
+        $previousCliPm = CliOptions::$packageManager;
+        CliOptions::$packageManager = $this->e2ePackageManagerKey();
 
-        $process = $this->jsPackageManager->installJsPackage(
-            package: $this->playwrightPackage(),
-            dev: true,
-            tty: $tty,
-            outputCallback: function (string $type, string $buffer): void {
-                $this->output->write($buffer);
-            },
-        );
+        try {
+            $tty = Process::isTtySupported() && $this->input->isInteractive() && ! (bool) $this->option('unattended');
 
-        return $process && $process->isSuccessful() ? self::SUCCESS : self::FAILURE;
+            $process = $this->jsPackageManager->installJsPackage(
+                package: $this->playwrightPackage(),
+                dev: true,
+                tty: $tty,
+                outputCallback: function (string $type, string $buffer): void {
+                    $this->output->write($buffer);
+                },
+            );
+
+            return $process && $process->isSuccessful() ? self::SUCCESS : self::FAILURE;
+        } finally {
+            CliOptions::$packageManager = $previousCliPm;
+        }
     }
 
     /**

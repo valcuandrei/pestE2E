@@ -90,7 +90,7 @@ The installer can:
 
 Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--setup-testing-database`, `--configure-phpunit`.
 
-When publishing `E2ETestCase`, the installer sets the default JS package manager from tools **found on your PATH** (`pnpm`, `yarn`, `bun`, `npm`). Pass **`--package-manager=pnpm`** (etc.) to force the stub value and skip detection. If more than one is available, you are prompted to pick one in interactive installs; with `--no-interaction` / `--yes`, it prefers a manager that matches an existing **lockfile**, otherwise the first in priority order (pnpm → yarn → bun → npm). If none are on PATH, it falls back to lockfile-only detection (same order), then `npm`.
+When publishing `E2ETestCase`, the installer sets the default JS package manager from tools **found on your PATH** (`pnpm`, `yarn`, `bun`, `npm`). The same resolved manager is used for the **Playwright dev dependency install** (so it no longer follows auto-detection / `PEST_E2E_PACKAGE_MANAGER` during that step). Pass **`--package-manager=pnpm`** (etc.) to force the stub value and skip detection. If more than one is available, you are prompted to pick one in interactive installs; with `--no-interaction` / `--yes`, it prefers a manager that matches an existing **lockfile**, otherwise the first in priority order (pnpm → yarn → bun → npm). If none are on PATH, it falls back to lockfile-only detection (same order), then `npm`.
 
 ### Unattended / CI mode
 
@@ -124,7 +124,7 @@ php artisan pest-e2e:install --unattended
 | `--publish-browser-tests` | Publish browser tests |
 | `--publish-playwright-tests` | Publish Playwright tests |
 | `--install-playwright` | Install Playwright via npm |
-| `--package-manager=` | Force the value embedded in `E2ETestCase` (`npm`, `yarn`, `pnpm`, `bun`); skips PATH / lockfile detection and interactive choice |
+| `--package-manager=` | Force the value embedded in `E2ETestCase` and used for Playwright install (`npm`, `yarn`, `pnpm`, `bun`); skips PATH / lockfile detection and interactive choice |
 
 ---
 
