@@ -10,6 +10,7 @@ use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessResultDTO;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
+use ValcuAndrei\PestE2E\Support\ParallelWorker;
 
 final class PlaywrightWorker implements JsWorkerContract
 {
@@ -108,7 +109,7 @@ final class PlaywrightWorker implements JsWorkerContract
     private function playwrightOutputDirectory(string $workingDirectory): string
     {
         $base = rtrim(sys_get_temp_dir(), '/').'/pest-e2e/playwright-output';
-        $targetDir = $base.'/'.md5($workingDirectory);
+        $targetDir = $base.'/'.md5($workingDirectory).ParallelWorker::pathSuffix();
 
         if (! is_dir($targetDir) && ! @mkdir($targetDir, 0775, true) && ! is_dir($targetDir)) {
             throw new RuntimeException("Unable to create Playwright output directory: {$targetDir}");

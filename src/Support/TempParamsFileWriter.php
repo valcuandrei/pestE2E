@@ -25,7 +25,7 @@ final class TempParamsFileWriter implements ParamsFileWriterContract
     public function write(string $target, string $runId, string $json): string
     {
         $base = $this->baseDir ?? sys_get_temp_dir();
-        $dir = rtrim($base, '/').'/pest-e2e/'.$this->sanitize($target);
+        $dir = rtrim($base, '/').'/pest-e2e/'.$this->sanitize($target).ParallelWorker::pathSuffix();
 
         if (! is_dir($dir) && ! @mkdir($dir, 0777, true) && ! is_dir($dir)) {
             throw new RuntimeException("Unable to create params dir: {$dir}");

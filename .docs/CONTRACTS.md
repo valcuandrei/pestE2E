@@ -10,7 +10,12 @@ Injected into every Node process:
 
 ## Suite execution contract
 
-**Process model:** E2E runs are **not parallel-safe**. Do not execute multiple Pest processes (e.g. `pest --parallel`) that each invoke the JS runner against the same app; parallel support is not implemented.
+**Process model:** E2E runs are parallel-safe when each Pest / Paratest worker has isolated resources:
+
+- `TEST_TOKEN` — detected from the environment; drives port (`parallel.base_port` + token), cache key prefix, and temp paths
+- `DB_DATABASE` — must follow Laravel’s `{database}_test_{TEST_TOKEN}` convention (use `RefreshDatabase` / `DatabaseMigrations` with parallel testing)
+- `APP_URL` — set per run to the worker’s managed server URL and injected into Playwright env
+- Auth tickets — cache keys are scoped per worker to prevent cross-process consumption
 
 The package is **runner-agnostic**. Two contracts define the bridge:
 

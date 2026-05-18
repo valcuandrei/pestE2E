@@ -10,11 +10,30 @@ use ValcuAndrei\PestE2E\Install\InstallProjectProbe;
 use ValcuAndrei\PestE2E\Install\InstallStep;
 use ValcuAndrei\PestE2E\Install\StepResult;
 
+use function Laravel\Prompts\confirm;
+
 /**
- * Creates `.env.testing` from `.env` with SQLite and E2E-friendly overrides.
+ * Creates or updates `.env.testing` with parallel-safe E2E overrides.
  */
 final class CreateEnvTestingStep extends InstallStep
 {
+    /** @var array<string, string> */
+    private const SAIL_MYSQL_DEFAULTS = [
+        'DB_CONNECTION' => 'mysql',
+        'DB_HOST' => 'mysql',
+        'DB_PORT' => '3306',
+        'DB_DATABASE' => 'testing',
+        'DB_USERNAME' => 'sail',
+        'DB_PASSWORD' => 'password',
+    ];
+
+    /** @var array<string, string> */
+    private const PARALLEL_SAFE_TESTING_DEFAULTS = [
+        'SESSION_DRIVER' => 'array',
+        'CACHE_STORE' => 'array',
+        'QUEUE_CONNECTION' => 'sync',
+    ];
+
     /**
      * {@inheritdoc}
      */
@@ -28,9 +47,12 @@ final class CreateEnvTestingStep extends InstallStep
      */
     public function run(InstallContext $ctx): StepResult
     {
-        if ($this->createEnvTestingFile($ctx) === Command::SUCCESS) {
+        $path = base_path('.env.testing');
+        $existed = is_file($path);
+
+        if ($this->writeEnvTestingFile($ctx, $existed) === Command::SUCCESS) {
             if (! $ctx->isQuiet()) {
-                $ctx->info('.env.testing created successfully.');
+                $ctx->info($existed ? '.env.testing updated successfully.' : '.env.testing created successfully.');
             }
 
             return StepResult::ok();
@@ -54,44 +76,130 @@ final class CreateEnvTestingStep extends InstallStep
     }
 
     /**
-     * Merge `.env` keys with testing overrides; skip if `.env.testing` exists unless `--force`.
+     * Merge environment keys with parallel-safe testing overrides.
      */
-    private function createEnvTestingFile(InstallContext $ctx): int
+    private function writeEnvTestingFile(InstallContext $ctx, bool $existed): int
     {
         $path = base_path('.env.testing');
-        if (is_file($path) && ! $ctx->force) {
-            return Command::SUCCESS;
-        }
+        $sourcePath = $existed ? $path : base_path('.env');
+        $content = '';
 
-        $envPath = base_path('.env');
-        if (! is_file($envPath)) {
-            if (! $ctx->isQuiet()) {
-                $ctx->warn('.env file not found. Skipping .env.testing creation. Run php artisan key:generate first.');
+        if (is_file($sourcePath)) {
+            $read = file_get_contents($sourcePath);
+            if ($read === false) {
+                return Command::FAILURE;
             }
 
-            return Command::SUCCESS;
+            $content = $read;
+        } elseif (! $existed && ! $ctx->isQuiet()) {
+            $ctx->warn('.env file not found. Creating .env.testing from Pest E2E testing defaults.');
         }
-
-        $content = file_get_contents($envPath);
-        if ($content === false) {
-            return Command::FAILURE;
-        }
-
-        $overrides = [
-            'APP_ENV' => 'testing',
-            'APP_URL' => 'http://127.0.0.1',
-            'DB_CONNECTION' => 'sqlite',
-            'DB_DATABASE' => 'testing',
-            'CACHE_STORE' => 'database',
-            'SESSION_DRIVER' => 'database',
-            'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
-        ];
 
         $lines = preg_split('/\r\n|\r|\n/', $content);
         if ($lines === false) {
             return Command::FAILURE;
         }
 
+        $values = $this->readEnvValues($lines);
+        $overrides = $this->testingOverrides($ctx, $values, $existed);
+
+        $output = $this->mergeEnvLines($lines, $overrides);
+
+        return file_put_contents($path, $output) !== false ? Command::SUCCESS : Command::FAILURE;
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     * @return array<string, string>
+     */
+    private function testingOverrides(InstallContext $ctx, array $values, bool $existed): array
+    {
+        $overrides = [
+            'APP_ENV' => 'testing',
+            'APP_URL' => $values['APP_URL'] ?? 'http://127.0.0.1',
+            'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
+            ...self::PARALLEL_SAFE_TESTING_DEFAULTS,
+        ];
+
+        if (! $existed) {
+            return [
+                ...$overrides,
+                ...self::SAIL_MYSQL_DEFAULTS,
+            ];
+        }
+
+        $connection = strtolower($this->unquote($values['DB_CONNECTION'] ?? ''));
+
+        if ($connection === '') {
+            return [
+                ...$overrides,
+                ...self::SAIL_MYSQL_DEFAULTS,
+            ];
+        }
+
+        if ($connection === 'sqlite') {
+            if (! $ctx->isQuiet()) {
+                $ctx->warn('DB_CONNECTION=sqlite is not recommended for parallel browser testing. Laravel parallel testing works best with a real test database so workers can use suffixed databases.');
+            }
+
+            if ($this->shouldSwitchSqliteToSailMysql($ctx)) {
+                if (! $ctx->isQuiet()) {
+                    $ctx->info('Switching .env.testing to Sail-compatible MySQL testing defaults.');
+                }
+
+                return [
+                    ...$overrides,
+                    ...self::SAIL_MYSQL_DEFAULTS,
+                ];
+            }
+
+            if (! $ctx->isQuiet()) {
+                $ctx->warn('Leaving DB_CONNECTION=sqlite unchanged. Re-run with --yes, --force, or switch to a real test database before using parallel E2E tests.');
+            }
+        }
+
+        return $overrides;
+    }
+
+    private function shouldSwitchSqliteToSailMysql(InstallContext $ctx): bool
+    {
+        if ($ctx->force || (bool) $ctx->option('yes') || (bool) $ctx->option('unattended')) {
+            return true;
+        }
+
+        if (! $ctx->isInteractive()) {
+            return false;
+        }
+
+        return confirm(
+            'Switch .env.testing from SQLite to Sail MySQL defaults for parallel testing?',
+            false
+        );
+    }
+
+    /**
+     * @param  list<string>  $lines
+     * @return array<string, string>
+     */
+    private function readEnvValues(array $lines): array
+    {
+        $values = [];
+
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*([A-Za-z_]\w*)=(.*)$/', $line, $matches) === 1) {
+                $values[$matches[1]] = $matches[2];
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     * @param  array<string, string>  $overrides
+     */
+    private function mergeEnvLines(array $lines, array $overrides): string
+    {
         $result = [];
         $seen = [];
 
@@ -122,8 +230,24 @@ final class CreateEnvTestingStep extends InstallStep
             }
         }
 
-        $output = implode("\n", $result);
+        return rtrim(implode("\n", $result), "\n")."\n";
+    }
 
-        return file_put_contents($path, $output) !== false ? Command::SUCCESS : Command::FAILURE;
+    private function unquote(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (
+            (str_starts_with($value, '"') && str_ends_with($value, '"'))
+            || (str_starts_with($value, "'") && str_ends_with($value, "'"))
+        ) {
+            return substr($value, 1, -1);
+        }
+
+        return $value;
     }
 }

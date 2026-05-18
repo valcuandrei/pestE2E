@@ -40,6 +40,15 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
         return app(E2EOutputStore::class);
     }
 
+    private function resolveStore(): ?E2EOutputStore
+    {
+        try {
+            return $this->store();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -55,7 +64,11 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
      */
     public function addOutput(int $exitCode): int
     {
-        $store = $this->store();
+        $store = $this->resolveStore();
+
+        if (! $store instanceof E2EOutputStore) {
+            return $exitCode;
+        }
 
         // Print per-test entries inline (without repeating parent test line)
         $perTestEntries = $store->getAllPerTestEntries();
@@ -144,7 +157,7 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
      */
     public function terminate(): void
     {
-        $this->store()->flush();
+        $this->resolveStore()?->flush();
         ServerRunner::stopAll();
     }
 

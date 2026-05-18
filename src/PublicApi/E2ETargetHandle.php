@@ -225,7 +225,7 @@ final class E2ETargetHandle
                     $report = $this->root->runner()->run(
                         targetName: $this->target,
                         env: array_merge($this->env, ['APP_URL' => $baseUrl]),
-                        params: $this->params,
+                        params: array_replace($this->params, ['baseUrl' => $baseUrl]),
                         options: $this->options,
                         runId: $runId,
                         testFilter: $this->testFilter,
@@ -448,7 +448,13 @@ final class E2ETargetHandle
         $lines = [];
 
         foreach ($report->getFailedTests() as $test) {
-            $lines[] = $test->name.($test->file ? ' ['.$test->file.']' : '');
+            $line = $test->name.($test->file ? ' ['.$test->file.']' : '');
+
+            if ($test->error !== null && trim($test->error->message) !== '') {
+                $line .= "\n  ".str_replace("\n", "\n  ", mb_substr(trim($test->error->message), 0, 2000));
+            }
+
+            $lines[] = $line;
         }
 
         return new RuntimeException(

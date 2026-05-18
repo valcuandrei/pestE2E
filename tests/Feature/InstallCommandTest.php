@@ -221,6 +221,162 @@ it('updates Pest.php and publishes when --yes and Playwright not installed', fun
     expect(file_exists($this->tempDir.'/database/testing.sqlite'))->toBeTrue();
 });
 
+it('creates a parallel-safe .env.testing when missing', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--setup-env-testing' => true],
+        argvFlags: ['--setup-env-testing', '--no-interaction']
+    );
+
+    $env = file_get_contents($this->tempDir.'/.env.testing');
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($env)->toContain('DB_CONNECTION=mysql')
+        ->and($env)->toContain('DB_HOST=mysql')
+        ->and($env)->toContain('DB_PORT=3306')
+        ->and($env)->toContain('DB_DATABASE=testing')
+        ->and($env)->toContain('DB_USERNAME=sail')
+        ->and($env)->toContain('DB_PASSWORD=password')
+        ->and($env)->toContain('SESSION_DRIVER=array')
+        ->and($env)->toContain('CACHE_STORE=array')
+        ->and($env)->toContain('QUEUE_CONNECTION=sync');
+});
+
+it('patches existing .env.testing session cache and queue keys without removing unrelated lines', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/.env.testing', <<<'ENV'
+APP_ENV=testing
+# Keep this comment
+CUSTOM_VALUE=keep-me
+DB_CONNECTION=mysql
+DB_HOST=mysql-custom
+DB_PORT=3307
+DB_DATABASE=custom_testing
+DB_USERNAME=custom_user
+DB_PASSWORD=secret
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+ENV);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--update-testing-env' => true],
+        argvFlags: ['--update-testing-env', '--no-interaction']
+    );
+
+    $env = file_get_contents($this->tempDir.'/.env.testing');
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($env)->toContain('# Keep this comment')
+        ->and($env)->toContain('CUSTOM_VALUE=keep-me')
+        ->and($env)->toContain('DB_HOST=mysql-custom')
+        ->and($env)->toContain('DB_PORT=3307')
+        ->and($env)->toContain('DB_DATABASE=custom_testing')
+        ->and($env)->toContain('DB_USERNAME=custom_user')
+        ->and($env)->toContain('DB_PASSWORD=secret')
+        ->and($env)->toContain('SESSION_DRIVER=array')
+        ->and($env)->toContain('CACHE_STORE=array')
+        ->and($env)->toContain('QUEUE_CONNECTION=sync');
+});
+
+it('preserves existing pgsql database credentials when updating .env.testing', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/.env.testing', <<<'ENV'
+APP_ENV=testing
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5433
+DB_DATABASE=tenant_testing
+DB_USERNAME=tenant_user
+DB_PASSWORD=tenant_password
+ENV);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--update-testing-env' => true],
+        argvFlags: ['--update-testing-env', '--no-interaction']
+    );
+
+    $env = file_get_contents($this->tempDir.'/.env.testing');
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($env)->toContain('DB_CONNECTION=pgsql')
+        ->and($env)->toContain('DB_HOST=postgres')
+        ->and($env)->toContain('DB_PORT=5433')
+        ->and($env)->toContain('DB_DATABASE=tenant_testing')
+        ->and($env)->toContain('DB_USERNAME=tenant_user')
+        ->and($env)->toContain('DB_PASSWORD=tenant_password')
+        ->and($env)->toContain('SESSION_DRIVER=array')
+        ->and($env)->toContain('CACHE_STORE=array')
+        ->and($env)->toContain('QUEUE_CONNECTION=sync');
+});
+
+it('warns and leaves sqlite database settings unchanged without consent', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/.env.testing', <<<'ENV'
+APP_ENV=testing
+DB_CONNECTION=sqlite
+DB_DATABASE=testing
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+ENV);
+    $this->mockJs->hasPlaywright = true;
+
+    $output = new BufferedOutput;
+    $exitCode = runInstall(
+        args: ['--update-testing-env' => true],
+        argvFlags: ['--update-testing-env', '--no-interaction'],
+        output: $output
+    );
+
+    $env = file_get_contents($this->tempDir.'/.env.testing');
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($output->fetch())->toContain('DB_CONNECTION=sqlite is not recommended')
+        ->and($env)->toContain('DB_CONNECTION=sqlite')
+        ->and($env)->toContain('DB_DATABASE=testing')
+        ->and($env)->toContain('SESSION_DRIVER=array')
+        ->and($env)->toContain('CACHE_STORE=array')
+        ->and($env)->toContain('QUEUE_CONNECTION=sync');
+});
+
+it('switches sqlite .env.testing to Sail MySQL defaults when forced', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/.env.testing', <<<'ENV'
+APP_ENV=testing
+DB_CONNECTION=sqlite
+DB_DATABASE=testing
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+ENV);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--update-testing-env' => true, '--force' => true],
+        argvFlags: ['--update-testing-env', '--force', '--no-interaction']
+    );
+
+    $env = file_get_contents($this->tempDir.'/.env.testing');
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and($env)->toContain('DB_CONNECTION=mysql')
+        ->and($env)->toContain('DB_HOST=mysql')
+        ->and($env)->toContain('DB_PORT=3306')
+        ->and($env)->toContain('DB_DATABASE=testing')
+        ->and($env)->toContain('DB_USERNAME=sail')
+        ->and($env)->toContain('DB_PASSWORD=password');
+});
+
 it('registers Pest E2E PHPUnit extension when --no but phpunit.xml exists', function (): void {
     createPestPhp($this->tempDir);
     createInstallTestEnv($this->tempDir);

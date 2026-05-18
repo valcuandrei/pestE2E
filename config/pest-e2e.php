@@ -23,6 +23,10 @@ return [
     'server' => [
         'driver' => env('PEST_E2E_SERVER_DRIVER', 'php_builtin'), // php_builtin or artisan
     ],
+    'parallel' => [
+        // Each parallel worker uses base_port + TEST_TOKEN (e.g. 8801, 8802, …).
+        'base_port' => (int) env('PEST_E2E_PARALLEL_BASE_PORT', 8800),
+    ],
     'timing' => [
         'enabled' => env('PEST_E2E_TIMING', false),
     ],

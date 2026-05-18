@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E\Runners;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
+use ValcuAndrei\PestE2E\Support\ParallelWorker;
 
 /**
  * @internal
@@ -73,9 +74,7 @@ final class ServerRunner
         }
 
         $this->waitUntilReady(
-            baseUrl: $this->baseUrl(),
             timeoutSeconds: 12,
-            probePath: $this->probePath(),
         );
 
         return $callback($this->baseUrl());
@@ -90,13 +89,13 @@ final class ServerRunner
             return;
         }
 
-        $this->port = $this->findFreePort($this->host);
+        $this->port = $this->resolvePort();
 
         $basePath = $this->basePath();
 
         $publicPath = $basePath.'/public';
 
-        $env = array_merge($_ENV, [
+        $env = array_merge($_ENV, ParallelWorker::serverEnvironment(), [
             'APP_ENV' => 'testing',
             'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
             'APP_URL' => $this->baseUrl(),
@@ -247,7 +246,7 @@ final class ServerRunner
     /**
      * Wait until the server is ready.
      */
-    private function waitUntilReady(string $baseUrl, int $timeoutSeconds, string $probePath): void
+    private function waitUntilReady(int $timeoutSeconds): void
     {
         $deadline = microtime(true) + $timeoutSeconds;
 
@@ -263,7 +262,7 @@ final class ServerRunner
                 );
             }
 
-            if ($this->httpResponds($baseUrl.$probePath) || $this->httpResponds($baseUrl.'/')) {
+            if ($this->tcpResponds()) {
                 return;
             }
 
@@ -275,28 +274,22 @@ final class ServerRunner
         $err = trim($process->getErrorOutput());
 
         throw new RuntimeException(
-            "Managed server did not become ready within {$timeoutSeconds}s at {$baseUrl}.\n\nSTDOUT:\n{$out}\n\nSTDERR:\n{$err}\n"
+            "Managed server did not become ready within {$timeoutSeconds}s at {$this->baseUrl()}.\n\nSTDOUT:\n{$out}\n\nSTDERR:\n{$err}\n"
         );
     }
 
     /**
-     * Check if the server responds to HTTP.
-     *
-     * Uses a generous timeout for the readiness check because the first request
-     * triggers Laravel bootstrap, which can take several seconds (especially on Windows).
+     * Check if the server is accepting TCP connections without issuing an HTTP request.
      */
-    private function httpResponds(string $url, float $timeout = 8.0): bool
+    private function tcpResponds(float $timeout = 0.2): bool
     {
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => $timeout,
-                'ignore_errors' => true,
-                'header' => "Connection: close\r\n",
-            ],
-        ]);
+        $fp = @stream_socket_client(
+            "tcp://{$this->host}:{$this->port}",
+            $errno,
+            $errstr,
+            $timeout
+        );
 
-        $fp = @fopen($url, 'r', false, $context);
         if ($fp === false) {
             return false;
         }
@@ -304,6 +297,20 @@ final class ServerRunner
         fclose($fp);
 
         return true;
+    }
+
+    /**
+     * Resolve the server port (deterministic per parallel worker, or ephemeral otherwise).
+     */
+    private function resolvePort(): int
+    {
+        $parallelPort = ParallelWorker::serverPort();
+
+        if ($parallelPort !== null) {
+            return $parallelPort;
+        }
+
+        return $this->findFreePort($this->host);
     }
 
     /**
@@ -395,22 +402,6 @@ final class ServerRunner
         }
 
         return $basePath;
-    }
-
-    /**
-     * Get the probe path of the server.
-     */
-    private function probePath(): string
-    {
-        $path = $_ENV['PEST_E2E_AUTH_ROUTE']
-            ?? $_SERVER['PEST_E2E_AUTH_ROUTE']
-            ?? getenv('PEST_E2E_AUTH_ROUTE');
-
-        if (is_string($path) && $path !== '' && str_starts_with($path, '/')) {
-            return $path;
-        }
-
-        return '/pest-e2e/auth/login';
     }
 
     /**

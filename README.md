@@ -54,9 +54,23 @@ All browser logic lives in JavaScript.
 The public PHP API, authentication contract, and JSON report schema are locked.
 Internal runner adapters may evolve.
 
-### ⚠️ Parallel test execution is not supported
+### Parallel test execution
 
-**Do not use Pest’s `--parallel` option (or other parallel PHPUnit / process splitting) for suites that call `e2e()->…->run()`.** E2E tests must run **one process at a time**: they rely on a managed app server, auth tickets, shared testing DB/session configuration, and coordinated Playwright processes. Running Browser/E2E tests in parallel is **unsupported** and may fail unpredictably (lost targets, port conflicts, flaky auth). Run those tests **sequentially** (default for a single `pest` / `phpunit` process without `--parallel`). Parallel support may be added in a future release.
+Browser tests that call `e2e()->…->run()` can run with Pest / Laravel parallel testing:
+
+```bash
+php artisan test --parallel --processes=4
+```
+
+Each worker gets:
+
+* a **dedicated HTTP port** (`PEST_E2E_PARALLEL_BASE_PORT` + `TEST_TOKEN`, default base `8800`)
+* **worker-scoped auth ticket cache keys** (no cross-worker ticket bleed)
+* **`APP_URL` / `baseUrl`** passed to Playwright matching that port
+
+**Database per worker (required):** use Laravel’s parallel database support (`RefreshDatabase`, `DatabaseMigrations`, etc.) so each worker uses `{database}_test_{TEST_TOKEN}`. The managed server subprocess receives the same `DB_DATABASE` and `CACHE_PREFIX` as the worker. Without per-worker databases, parallel E2E will hit unique constraint violations and flaky auth.
+
+Configure the base port in `config/pest-e2e.php` under `parallel.base_port` or via `PEST_E2E_PARALLEL_BASE_PORT` in `.env.testing`.
 
 ---
 
@@ -82,13 +96,13 @@ The installer can:
 * Publish the JS harness
 * Publish the Playwright integration
 * Install `@playwright/test` and download Playwright **browser binaries** (`playwright install`)
-* Create `.env.testing` from `.env` with E2E-appropriate overrides
-* Create `database/testing.sqlite` for SQLite tests
+* Create or update `.env.testing` with parallel-safe E2E overrides
+* Create `database/testing.sqlite` for projects that intentionally use SQLite
 * Configure `phpunit.xml` to let `.env.testing` control DB/cache (comment out overrides)
 * Ensure `phpunit.xml` defines a **Browser** testsuite for `tests/Browser` (when `phpunit.xml` exists; idempotent on every successful install)
 * When **Laravel Sail** is present (`laravel/sail` in `composer.json` or `vendor/laravel/sail`, plus a `laravel.test` service), offer to merge the **Headed Mode in Sail** block into your Docker Compose file — the file is chosen in the same order Docker Compose does: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, then `docker-compose.yml`
 
-Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--setup-testing-database`, `--configure-phpunit`.
+Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--update-testing-env`, `--setup-testing-database`, `--configure-phpunit`.
 
 When publishing `E2ETestCase`, the installer sets the default JS package manager from tools **found on your PATH** (`pnpm`, `yarn`, `bun`, `npm`). The same resolved manager is used for the **Playwright dev dependency install** (so it no longer follows auto-detection / `PEST_E2E_PACKAGE_MANAGER` during that step). Pass **`--package-manager=pnpm`** (etc.) to force the stub value and skip detection. If more than one is available, you are prompted to pick one in interactive installs; with `--no-interaction` / `--yes`, it prefers a manager that matches an existing **lockfile**, otherwise the first in priority order (pnpm → yarn → bun → npm). If none are on PATH, it falls back to lockfile-only detection (same order), then `npm`.
 
@@ -108,12 +122,13 @@ php artisan pest-e2e:install --unattended
 
 | Option | Description |
 |--------|-------------|
-| `--yes` | Answer yes to all questions (performs full setup: update-pest, publish-config, publish-base-test-case, publish-js-harness, publish-js-playwright, add-csrf-exclusion, setup-env-testing, setup-testing-database, configure-phpunit, sail-wslg-headed when Sail is detected, install-playwright) |
+| `--yes` | Answer yes to all questions (performs full setup: update-pest, publish-config, publish-base-test-case, publish-js-harness, publish-js-playwright, add-csrf-exclusion, setup-env-testing/update-testing-env, setup-testing-database, configure-phpunit, sail-wslg-headed when Sail is detected, install-playwright) |
 | `--no` | Answer no to all questions |
 | `--force` | Overwrite existing files when publishing |
 | `--update-pest` | Update Pest config to include E2ETestCase |
-| `--setup-env-testing` | Create `.env.testing` from `.env` with E2E overrides |
-| `--setup-testing-database` | Create `database/testing.sqlite` |
+| `--setup-env-testing` | Create `.env.testing` with parallel-safe E2E overrides |
+| `--update-testing-env` | Patch an existing `.env.testing` with parallel-safe session/cache/queue settings |
+| `--setup-testing-database` | Create `database/testing.sqlite` for projects that intentionally use SQLite |
 | `--configure-phpunit` | Comment out DB/cache env in `phpunit.xml` so `.env.testing` controls them |
 | `--sail-wslg-headed` | Merge WSLg display/volume settings into the Sail `laravel.test` service of the resolved Compose file (see **Headed Mode in Sail** below) |
 | `--add-csrf-exclusion` | Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows) |
@@ -138,34 +153,44 @@ pestE2E starts a managed Laravel server using:
 
 If a `.env.testing` file exists, Laravel automatically loads it.
 
-**The installer can create this for you** with `--setup-env-testing` (included in `--yes`). It copies `.env` and applies E2E overrides:
+**The installer can create this for you** with `--setup-env-testing` (included in `--yes`). It prefers Sail-compatible MySQL defaults because Laravel parallel testing creates per-worker databases from the base database name:
 
 ```dotenv
 APP_ENV=testing
 APP_URL=http://127.0.0.1
 
-DB_CONNECTION=sqlite
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
 DB_DATABASE=testing
+DB_USERNAME=sail
+DB_PASSWORD=password
 
-CACHE_STORE=database
-SESSION_DRIVER=database
+SESSION_DRIVER=array
+CACHE_STORE=array
+QUEUE_CONNECTION=sync
 
 PEST_E2E_AUTH_ROUTE_ENABLED=true
 ```
 
-For SQLite, the installer can also create `database/testing.sqlite` (`--setup-testing-database`) and configure `phpunit.xml` to omit DB/cache env vars so `.env.testing` controls them (`--configure-phpunit`).
+For existing `.env.testing` files, use `--update-testing-env` or `--yes`. The installer preserves existing MySQL/PostgreSQL database credentials, updates `SESSION_DRIVER=array`, `CACHE_STORE=array`, and `QUEUE_CONNECTION=sync`, and warns before replacing SQLite with Sail MySQL defaults unless `--yes`, `--unattended`, or `--force` already implies consent.
 
-**Manual setup:** If you prefer to configure yourself, create `.env.testing` with an isolated database:
+**Manual setup:** If you prefer to configure yourself, create `.env.testing` with a real isolated test database:
 
 ```dotenv
 APP_ENV=testing
 APP_DEBUG=true
 
-DB_CONNECTION=sqlite
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
 DB_DATABASE=testing
+DB_USERNAME=sail
+DB_PASSWORD=password
 
-CACHE_STORE=database
-SESSION_DRIVER=database
+SESSION_DRIVER=array
+CACHE_STORE=array
+QUEUE_CONNECTION=sync
 
 PEST_E2E_AUTH_ROUTE_ENABLED=true
 ```
@@ -175,7 +200,9 @@ This ensures:
 * Your development database is not modified
 * Auth routes are enabled only during testing
 * The Pest process and the managed server use the same database
-* Cache and session are shared (required for auth ticket exchange)
+* Feature tests and browser tests do not share database-backed session/cache/queue state across workers
+
+For `php artisan test --parallel`, Laravel creates per-worker databases such as `testing_test_1`, `testing_test_2`, etc. SQLite is not recommended for parallel browser testing because it does not provide the same per-worker database isolation model.
 
 Your `phpunit.xml` must not override `DB_CONNECTION`, `DB_DATABASE`, `CACHE_STORE`, or `SESSION_DRIVER` — let `.env.testing` control them. The installer can comment these out for you with `--configure-phpunit`.
 
@@ -194,7 +221,7 @@ e2e()->target('frontend', fn ($p) => $p
     ->params(['baseUrl' => 'http://localhost'])
 );
 ```
->Register targets in your base E2E test case (`E2ETestCase::setUp()`), not inside individual test functions. Do not run those tests with `--parallel` (see **Parallel test execution is not supported** under [Status](#status) above).
+>Register targets in your base E2E test case (`E2ETestCase::setUp()`), not inside individual test functions. For `--parallel`, ensure per-worker databases (see [Parallel test execution](#parallel-test-execution) under [Status](#status)).
 
 Run all tests:
 
@@ -316,7 +343,11 @@ Sail:
 sail artisan test
 ```
 
-**E2E / Browser tests:** keep the default **sequential** run. Avoid `pest --parallel` / `php artisan test --parallel` for directories or projects that include `e2e()->…->run()` — parallel execution is **not supported** at this time (see warning under [Status](#status)).
+**E2E / Browser tests:** parallel runs are supported when each worker has an isolated database (see [Parallel test execution](#parallel-test-execution) under [Status](#status)).
+
+```bash
+php artisan test --parallel --processes=4
+```
 
 ---
 

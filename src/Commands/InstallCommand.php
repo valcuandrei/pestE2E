@@ -43,13 +43,14 @@ final class InstallCommand extends Command
         .' {--publish-browser-tests : Publish the Pest E2E browser tests}'
         .' {--publish-playwright-tests : Publish the Pest E2E Playwright tests}'
         .' {--add-csrf-exclusion : Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows)}'
-        .' {--setup-env-testing : Create .env.testing from .env with E2E-appropriate overrides}'
+        .' {--setup-env-testing : Create .env.testing with parallel-safe E2E overrides}'
+        .' {--update-testing-env : Update an existing .env.testing with parallel-safe E2E overrides}'
         .' {--setup-testing-database : Create database/testing.sqlite for SQLite tests}'
         .' {--configure-phpunit : Comment out DB/cache env in phpunit.xml so .env.testing controls them}'
         .' {--sail-wslg-headed : Add WSLg display/volume config to the Sail laravel.test service in compose file}'
         .' {--install-playwright : Install Playwright}'
         .' {--package-manager= : Package manager written into E2ETestCase (npm, yarn, pnpm, bun); skips detection}'
-        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion --setup-env-testing --setup-testing-database --configure-phpunit --sail-wslg-headed)}'
+        .' {--yes : Answer yes to all questions (shortcut for --update-pest --install-playwright --publish-config --publish-base-test-case --publish-js-harness --publish-js-playwright --add-csrf-exclusion --setup-env-testing --update-testing-env --setup-testing-database --configure-phpunit --sail-wslg-headed)}'
         .' {--no : Answer no to all questions (can be overridden by the individual options)}'
         .' {--unattended : Answer yes to all questions (shortcut for --yes)}';
 
@@ -315,15 +316,19 @@ final class InstallCommand extends Command
     }
 
     /**
-     * Whether to create `.env.testing` from `.env`.
+     * Whether to create or update `.env.testing`.
      */
     private function shouldSetupEnvTesting(): bool
     {
-        if (InstallProjectProbe::envTestingExists() && ! $this->hasOptionFlag('setup-env-testing')) {
-            return false;
+        if (InstallProjectProbe::envTestingExists()) {
+            if ($this->hasOptionFlag('setup-env-testing') || $this->hasOptionFlag('update-testing-env')) {
+                return true;
+            }
+
+            return $this->shouldAccept('update-testing-env', 'Update .env.testing with parallel-safe E2E overrides?');
         }
 
-        return $this->shouldAccept('setup-env-testing', 'Create .env.testing from .env with E2E-appropriate overrides?');
+        return $this->shouldAccept('setup-env-testing', 'Create .env.testing with parallel-safe E2E overrides?');
     }
 
     /**

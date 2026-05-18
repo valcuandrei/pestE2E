@@ -25,7 +25,7 @@ e2e()->target('frontend', fn ($p) => $p
 - `only(string $pattern)` — run a subset when the runner supports filtering (runner-specific)
 - `runTest(string $name)` — convenience alias for single-test execution
 
-**Parallel runs:** Pest `--parallel` (and similar) are **not supported** for tests that invoke `run()`. Execute E2E tests sequentially in a single process.
+**Parallel runs:** Supported via Pest / Laravel `--parallel`. Each worker gets a dedicated port (`parallel.base_port` + `TEST_TOKEN`), worker-scoped auth tickets, and `APP_URL` passed to Playwright. Requires per-worker databases (`{database}_test_{TEST_TOKEN}`) using Laravel’s parallel testing traits.
 
 ### Filtering (runner-specific)
 

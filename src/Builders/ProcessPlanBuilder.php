@@ -13,6 +13,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Support\CliOptions;
+use ValcuAndrei\PestE2E\Support\ParallelWorker;
 
 /**
  * @internal
@@ -55,10 +56,16 @@ final readonly class ProcessPlanBuilder
             env: $context->env,
         );
 
-        $commandDto = $commandDto->withInjectedEnv([
+        $injected = [
             'PEST_E2E_TARGET' => $context->target->name,
             'PEST_E2E_RUN_ID' => $context->runId,
-        ]);
+        ];
+
+        if (($token = ParallelWorker::token()) !== null) {
+            $injected['TEST_TOKEN'] = $token;
+        }
+
+        $commandDto = $commandDto->withInjectedEnv($injected);
 
         $options = $options->withTimeoutSeconds(
             $isHeaded

@@ -50,7 +50,7 @@ CLI overrides: **`--browse`** / **`--headed`**, **`--debug`**, **`--run-using=np
 
 ## Parallelism
 
-**Unsupported:** Do not use `pest --parallel` (or equivalent) for tests that call `e2e()->…->run()`. Run E2E sequentially in a single process.
+`php artisan test --parallel` is supported when each worker has its own database (`{database}_test_{TEST_TOKEN}` via Laravel parallel testing traits). pestE2E assigns ports per worker, scopes auth tickets, and passes the matching `APP_URL` to Playwright.
 
 ## Playwright snippet (params + auth)
 
