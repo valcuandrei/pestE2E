@@ -53,6 +53,10 @@ final class Events
             return;
         }
 
+        if (CliOptions::agentOutput()) {
+            return;
+        }
+
         foreach ($entries as $entry) {
             if ($entry->ok && CliOptions::suppressPassedOutput()) {
                 continue;

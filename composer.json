@@ -32,6 +32,7 @@
         }
     },
     "require-dev": {
+        "laravel/agent-detector": "^2.0",
         "orchestra/testbench": "^11.0",
         "pestphp/pest": "^4.3.1",
         "pestphp/pest-dev-tools": "^4.0.0",
@@ -62,6 +63,9 @@
             "@test:types",
             "@test:unit"
         ]
+    },
+    "suggest": {
+        "laravel/agent-detector": "Automatic PAO-style agent environment detection (^2.0)"
     },
     "extra": {
         "laravel": {

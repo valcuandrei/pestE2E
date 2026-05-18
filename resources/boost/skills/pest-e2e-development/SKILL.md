@@ -1,6 +1,6 @@
 ---
 name: pest-e2e-development
-description: Develops and maintains pestE2E (valcuandrei/pest-e2e) JavaScript-driven E2E tests orchestrated from Pest. Activates when working with e2e() targets, E2ETestCase, Playwright specs, resources/js/pest-e2e harness, pest-e2e auth tickets, config/pest-e2e.php, pest-e2e:install, or when the user mentions browser E2E from Pest, pestE2E, or JS-owned E2E.
+description: Develops and maintains pestE2E (valcuandrei/pest-e2e) JavaScript-driven E2E tests orchestrated from Pest. Activates when working with e2e() targets, E2ETestCase, Playwright specs, resources/js/pest-e2e harness, pest-e2e auth tickets, config/pest-e2e.php, pest-e2e:install, agent/PAO JSON output (PEST_E2E_AGENT_OUTPUT, --pest-e2e-agent-output), parallel browser runs, or when the user mentions browser E2E from Pest, pestE2E, or JS-owned E2E.
 ---
 
 # pestE2E development
@@ -46,7 +46,36 @@ Key `config/pest-e2e.php` sections:
 - **`auth`** — route, TTL, header, `route_enabled`.
 - **`server`**, **`js_runner`**, **`package_manager`**, **`timing`** — see published config file for env keys.
 
-CLI overrides: **`--browse`** / **`--headed`**, **`--debug`**, **`--run-using=npm|yarn|pnpm|bun`**.
+CLI overrides: **`--browse`** / **`--headed`**, **`--debug`**, **`--run-using=npm|yarn|pnpm|bun`**, **`--pest-e2e-agent-output`** / **`--pest-e2e-json`**.
+
+## Playwright timeouts (hard rule)
+
+- **Default: 5 seconds** — `resources/js/e2e/playwright.config.js` sets `timeout`, `expect.timeout`, `actionTimeout`, and `navigationTimeout` to `5000`. Do not change these values upward.
+- **On timeout, fix the test or app** — never “fix” by increasing timeouts. Typical root causes:
+  - Wrong or brittle selector (prefer `getByTestId` / `data-test` aligned with the Vue page)
+  - Unexpected **redirect** (guest login, email verification, Fortify confirm-password)
+  - Wrong `baseURL` / path (`page.goto` not landing on the screen under test)
+  - Assertion before Inertia/Vue has rendered (use a stable locator or correct post-navigation expectation)
+- **Forbidden:** `{ timeout: 15_000 }`, `test.setTimeout`, editing config to 30s, or suggesting “try a higher timeout” without fixing the underlying issue.
+
+## Output modes
+
+| Mode | Passed E2E terminal output | Failed E2E terminal output |
+| ---- | -------------------------: | -------------------------: |
+| normal | yes | yes |
+| `--compact` | no | yes |
+| `--parallel` | no | yes |
+| agent / PAO (`PEST_E2E_AGENT_OUTPUT=1`, `--pest-e2e-agent-output`, `agent_output` config, or agent-detector) | compact JSON only | compact JSON with `php_test`, `failures`, `error` |
+
+Agent mode suppresses Pest/Collision human output. With `--parallel`, workers write JSON summaries to disk and the coordinator prints one JSON line per E2E run at the end.
+
+```bash
+PEST_E2E_AGENT_OUTPUT=1 php artisan test ./tests/Browser --parallel
+```
+
+## Reports and pruning
+
+Playwright artifacts: `{reports.base_dir}/{target}/{runId}` (default under `storage/framework/testing/pest-e2e`). Old marked run dirs are pruned per `reports.prune`; the current run is never deleted. JSON test results are parsed from stdout in memory (`pest-e2e.v1`), not stored as report files.
 
 ## Parallelism
 

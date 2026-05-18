@@ -6,6 +6,12 @@
 - Use `search-docs` for Laravel, Pest, PHPUnit, and Playwright topics. For package-specific contracts and the public PHP API, read **`CONTRACTS.md`** and **`API.md`** inside the installed package (`.docs/` directory relative to the package root).
 - **IMPORTANT:** Activate the **`pest-e2e-development`** skill when adding or changing E2E tests, Playwright specs, `e2e()` targets, `actingAs()` / auth tickets, CSRF exclusions for the auth route, `config/pest-e2e.php`, or files under `resources/js/pest-e2e/`.
 
+## Playwright timeouts (hard rule)
+
+- Default Playwright timeouts are **5 seconds** (`playwright.config.js`: test, expect, action, navigation). **Never increase them** to make a failing test pass.
+- If a step times out, **determine and fix the root cause** — most often a **wrong selector** (`data-test`, `#id`, role), an **unexpected redirect** (login, confirm-password, 403), wrong URL, or the page not ready yet (fix navigation/waits, not the clock).
+- **Do not** add or raise `timeout`, `actionTimeout`, `navigationTimeout`, or per-assertion `{ timeout: … }` above the config default. Remove overrides that bypass the 5s limit.
+
 ## Auth and safety
 
 - The testing-only login route defaults to **`/pest-e2e/auth/login`** (see `config('pest-e2e.auth.route')`). Enable with **`PEST_E2E_AUTH_ROUTE_ENABLED=true`** in `.env.testing` (not production).

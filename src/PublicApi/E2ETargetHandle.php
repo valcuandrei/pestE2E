@@ -20,6 +20,7 @@ use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
+use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
 use ValcuAndrei\PestE2E\Support\TimingProbe;
 
 /**
@@ -252,8 +253,21 @@ final class E2ETargetHandle
             'durationMs' => max(0, (int) round($durationSeconds * 1000)),
         ]);
 
+        $targetName = $report instanceof JsonReportDTO ? $report->target : $this->target;
+        $reportDirectory = app(ReportDirectoryManager::class)->resolveRunDirectory($targetName, $runId);
+        $phpTestFile = $this->currentTestFile();
+        $phpTestName = $parentTestName;
+        $failures = $report instanceof JsonReportDTO ? $this->buildAgentFailures($report) : [];
+        $errorMessage = null;
+        $errorStack = null;
+
+        if (! $ok && $failures === [] && $thrown !== null) {
+            $errorMessage = $thrown->getMessage();
+            $errorStack = $thrown->getTraceAsString();
+        }
+
         $lines = $this->buildRunLines(
-            target: $report instanceof JsonReportDTO ? $report->target : $this->target,
+            target: $targetName,
             runId: $runId,
             ok: $ok,
             durationSeconds: $durationSeconds,
@@ -275,6 +289,12 @@ final class E2ETargetHandle
                 durationSeconds: $durationSeconds,
                 stats: $report?->stats,
                 lines: $lines,
+                reportDirectory: $reportDirectory,
+                phpTestFile: $phpTestFile,
+                phpTestName: $phpTestName,
+                failures: $failures,
+                errorMessage: $errorMessage,
+                errorStack: $errorStack,
             );
 
             $this->outputStore->putForTest($currentTestId, $entry);
@@ -288,6 +308,12 @@ final class E2ETargetHandle
                 ok: $ok,
                 durationSeconds: $durationSeconds,
                 stats: $report?->stats,
+                reportDirectory: $reportDirectory,
+                phpTestFile: $phpTestFile,
+                phpTestName: $phpTestName,
+                failures: $failures,
+                errorMessage: $errorMessage,
+                errorStack: $errorStack,
             );
         }
 
@@ -333,6 +359,70 @@ final class E2ETargetHandle
     public function runTest(string $testName): void
     {
         $this->only($testName)->run();
+    }
+
+    /**
+     * @return array<int, array{name: string, js_file: ?string, message: ?string, stack: ?string}>
+     */
+    private function buildAgentFailures(JsonReportDTO $report): array
+    {
+        $failures = [];
+
+        foreach ($report->getFailedTests() as $test) {
+            $failures[] = [
+                'name' => $test->name,
+                'js_file' => $test->file !== null && $test->file !== ''
+                    ? $this->relativeProjectPath($test->file)
+                    : null,
+                'message' => $test->error?->message,
+                'stack' => $test->error?->stack,
+            ];
+        }
+
+        return $failures;
+    }
+
+    /**
+     * Get the current Pest/PHPUnit test file path (project-relative).
+     */
+    private function currentTestFile(): ?string
+    {
+        if (class_exists(TestSuite::class)) {
+            try {
+                $file = TestSuite::getInstance()->getFilename();
+
+                if ($file !== '') {
+                    return $this->relativeProjectPath($file);
+                }
+            } catch (\Throwable) {
+                // TestSuite may be unavailable outside a running test
+            }
+        }
+
+        return null;
+    }
+
+    private function relativeProjectPath(string $absolute): string
+    {
+        if (function_exists('base_path')) {
+            try {
+                $base = base_path();
+
+                if (str_starts_with($absolute, $base)) {
+                    return ltrim(substr($absolute, strlen($base)), DIRECTORY_SEPARATOR);
+                }
+            } catch (\Throwable) {
+                // base_path may be unavailable
+            }
+        }
+
+        $cwd = getcwd();
+
+        if ($cwd !== false && str_starts_with($absolute, $cwd)) {
+            return ltrim(substr($absolute, strlen($cwd)), DIRECTORY_SEPARATOR);
+        }
+
+        return $absolute;
     }
 
     /**

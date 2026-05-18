@@ -28,9 +28,7 @@ async function confirmAccountPasswordIfNeeded(
     await page.locator('#password').fill(String(accountPassword))
     await confirmBtn.click()
 
-    await expect(page.locator('#current_password')).toBeVisible({
-        timeout: 15_000,
-    })
+    await expect(page.locator('#current_password')).toBeVisible()
 }
 
 test('SecurityPassword form updates password', async ({ page }) => {
@@ -52,7 +50,5 @@ test('SecurityPassword form updates password', async ({ page }) => {
 
     await page.getByTestId('update-password-button').click()
 
-    await expect(page.getByText('Saved.')).toBeVisible({
-        timeout: 15_000,
-    })
+    await expect(page.getByText('Saved.')).toBeVisible()
 })

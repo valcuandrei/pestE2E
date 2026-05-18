@@ -12,6 +12,7 @@ beforeEach(function (): void {
     CliOptions::$debug = false;
     CliOptions::$compact = false;
     CliOptions::$parallel = false;
+    CliOptions::$agentOutput = false;
     CliOptions::$packageManager = null;
 });
 
@@ -65,6 +66,29 @@ it('detects compact output mode from collision printer env', function (): void {
 
     expect(CliOptions::$compact)->toBeTrue()
         ->and(CliOptions::suppressPassedOutput())->toBeTrue();
+});
+
+it('detects agent output mode from cli flag', function (): void {
+    CliOptions::fromArguments(['tests/Browser', '--pest-e2e-agent-output']);
+
+    expect(CliOptions::$agentOutput)->toBeTrue()
+        ->and(CliOptions::agentOutput())->toBeTrue()
+        ->and(CliOptions::suppressPassedOutput())->toBeTrue();
+});
+
+it('ensures --no-output is passed in agent output mode', function (): void {
+    CliOptions::fromArguments(['tests/Browser', '--pest-e2e-agent-output']);
+
+    $arguments = CliOptions::ensureNoOutput(['tests/Browser', '--pest-e2e-agent-output']);
+
+    expect($arguments)->toContain('--no-output');
+});
+
+it('filterArguments removes --pest-e2e-agent-output', function (): void {
+    $args = ['tests/Browser', '--pest-e2e-agent-output'];
+    $filtered = CliOptions::filterArguments($args);
+
+    expect($filtered)->toBe(['tests/Browser']);
 });
 
 it('detects parallel output mode', function (): void {

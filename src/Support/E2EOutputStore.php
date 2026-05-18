@@ -47,6 +47,7 @@ final class E2EOutputStore
 
     /**
      * @param  array<int, string>  $lines
+     * @param  array<int, array{name: string, js_file: ?string, message: ?string, stack: ?string}>  $failures
      */
     public function add(
         array $lines,
@@ -56,6 +57,12 @@ final class E2EOutputStore
         bool $ok,
         ?float $durationSeconds,
         ?JsonReportStatsDTO $stats,
+        ?string $reportDirectory = null,
+        ?string $phpTestFile = null,
+        ?string $phpTestName = null,
+        array $failures = [],
+        ?string $errorMessage = null,
+        ?string $errorStack = null,
     ): void {
         $normalizedLines = array_values(array_map(
             static fn (string $line): string => $line,
@@ -70,10 +77,18 @@ final class E2EOutputStore
             durationSeconds: $durationSeconds,
             stats: $stats,
             lines: $normalizedLines,
+            reportDirectory: $reportDirectory,
+            phpTestFile: $phpTestFile,
+            phpTestName: $phpTestName,
+            failures: $failures,
+            errorMessage: $errorMessage,
+            errorStack: $errorStack,
         );
 
         $this->entries[] = $entry;
         self::$staticEntries[] = $entry;
+
+        AgentOutputAggregator::record($entry);
     }
 
     /**
@@ -86,6 +101,8 @@ final class E2EOutputStore
         }
 
         self::$perTestEntries[$testId][] = $entry;
+
+        AgentOutputAggregator::record($entry);
     }
 
     /**

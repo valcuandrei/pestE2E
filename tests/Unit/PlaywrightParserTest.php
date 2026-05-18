@@ -102,7 +102,7 @@ it('converts a playwright report to canonical json report dto', function () {
 
     expect($testsByName['[firefox] updates user profile']->status)->toBe(TestStatusType::FAILED)
         ->and($testsByName['[firefox] updates user profile']->error?->message)->toContain('Expected success toast')
-        ->and($testsByName['[firefox] updates user profile']->error?->message)->toContain('Stack trace:')
+        ->and($testsByName['[firefox] updates user profile']->error?->stack)->toContain('Error line 1')
         ->and($testsByName['[firefox] updates user profile']->extraLines)->toBe(['timeout output']);
 
     expect($testsByName['skips flaky flow']->status)->toBe(TestStatusType::SKIPPED)

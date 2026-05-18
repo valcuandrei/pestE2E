@@ -351,6 +351,22 @@ php artisan test --parallel --processes=4
 
 Successful E2E detail output is shown in normal test runs. In `--compact` and `--parallel` runs, passed E2E details are suppressed so Pest output stays readable; failed E2E runs still print their details.
 
+## Agent / PAO output
+
+For AI agents and CI parsers, enable compact JSON (one line per `e2e()->run()`):
+
+```bash
+PEST_E2E_AGENT_OUTPUT=1 php artisan test ./tests/Browser
+php artisan test ./tests/Browser --pest-e2e-agent-output
+php artisan test ./tests/Browser --parallel --pest-e2e-agent-output
+```
+
+Also auto-detected when `laravel/agent-detector` is installed or common agent env vars are set (e.g. `CURSOR_AGENT`). Configure via `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` in `.env.testing`, or `agent_output` in `config/pest-e2e.php`.
+
+Disable with `PEST_E2E_AGENT_OUTPUT_DISABLE=1` or `PAO_DISABLE=1`.
+
+In agent mode, human-readable Pest output is suppressed. Failed runs include `php_test`, `failures` (JS name, file, message, stack), and `report_dir`. See `.docs/API.md` for the full JSON contract.
+
 ---
 
 # Debug & Headed Mode
@@ -459,6 +475,8 @@ Key config keys in `config/pest-e2e.php`:
 | `js_runner.driver` | JS runner (default: `playwright`) |
 | `js_runner.mode` | Runner mode: `cold` or `warm` (default: `cold`) |
 | `package_manager` | Package manager for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` (default: set in E2ETestCase during install, overridable via `--run-using`) |
+| `parallel.base_port` | Base HTTP port for parallel workers (`base_port` + `TEST_TOKEN`, default `8800`) |
+| `agent_output` | Force agent JSON output (default: from `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` env) |
 | `bindings` | Contract-to-implementation map for swapping the JS runner. Keys: `JsWorkerContract::class`, `JsonParserContract::class`. Default: Playwright. Override to use Cypress, Puppeteer, etc. |
 
 ---

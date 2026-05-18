@@ -43,4 +43,5 @@ return [
         'mode' => env('PEST_E2E_JS_RUNNER_MODE', 'cold'),
     ],
     'package_manager' => env('PEST_E2E_PACKAGE_MANAGER', null),
+    'agent_output' => env('PEST_E2E_AGENT_OUTPUT', env('PAO_FORCE', false)),
 ];

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use NunoMaduro\Collision\Adapters\Phpunit\Printers\DefaultPrinter;
 use NunoMaduro\Collision\Adapters\Phpunit\TestResult;
 use Symfony\Component\Console\Output\BufferedOutput;
 use ValcuAndrei\PestE2E\Collision\Events;
@@ -13,10 +14,31 @@ use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
 beforeEach(function (): void {
+    unset(
+        $_SERVER['PEST_E2E_AGENT_OUTPUT'],
+        $_SERVER['PAO_FORCE'],
+        $_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE'],
+        $_SERVER['CURSOR_AGENT'],
+        $_SERVER['COLLISION_PRINTER_COMPACT'],
+        $_ENV['COLLISION_PRINTER_COMPACT'],
+    );
+    putenv('PEST_E2E_AGENT_OUTPUT');
+    putenv('PAO_FORCE');
+    putenv('PEST_E2E_AGENT_OUTPUT_DISABLE');
+    putenv('CURSOR_AGENT');
+    putenv('COLLISION_PRINTER_COMPACT');
+
+    $_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE'] = '1';
+
+    if (class_exists(DefaultPrinter::class)) {
+        DefaultPrinter::compact(false);
+    }
+
     CliOptions::$browse = false;
     CliOptions::$debug = false;
     CliOptions::$compact = false;
     CliOptions::$parallel = false;
+    CliOptions::$agentOutput = false;
 
     app(E2EOutputStore::class)->flush();
     app(E2EOutputStore::class)->flushPerTestEntries();
@@ -77,6 +99,36 @@ it('prints inline e2e output after the test line and does not repeat at the end'
     $plugin->addOutput(0);
 
     expect($pluginOutput->fetch())->toBe('');
+});
+
+it('defers inline e2e output to the plugin in agent output mode', function (): void {
+    unset($_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE']);
+    putenv('PEST_E2E_AGENT_OUTPUT_DISABLE');
+    $_SERVER['PEST_E2E_AGENT_OUTPUT'] = '1';
+
+    $store = app(E2EOutputStore::class);
+
+    $entry = new E2EOutputEntryDTO(
+        type: 'run',
+        target: 'frontend',
+        runId: 'run-agent-inline',
+        ok: true,
+        durationSeconds: 0.12,
+        stats: null,
+        lines: ['inline parent', 'passed inline e2e line'],
+    );
+
+    $testId = 'test-id-agent-inline';
+    $store->putForTest($testId, $entry);
+
+    $output = new BufferedOutput;
+    Events::setOutput($output);
+    $output->writeln('✓ inline parent');
+
+    Events::afterTestMethodDescription(makeTestResult($testId));
+
+    expect($output->fetch())->toBe('✓ inline parent'.PHP_EOL)
+        ->and($store->getForTest($testId))->toHaveCount(1);
 });
 
 it('suppresses passed inline e2e output in compact mode', function (): void {

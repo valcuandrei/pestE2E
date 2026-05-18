@@ -76,7 +76,7 @@ only prints E2E details when something fails.
 
 ---
 
-### Milestone 4 — PAO / agent-friendly output
+### [X] Milestone 4 — PAO / agent-friendly output
 
 **Goal:** compact structured output for agents.
 
@@ -101,6 +101,33 @@ Acceptance:
   "report_dir": "..."
 }
 ```
+
+Failed runs also include diagnostic fields:
+
+```json
+{
+  "target": "frontend",
+  "result": "failed",
+  "passed": 0,
+  "failed": 1,
+  "duration_ms": 30056,
+  "report_dir": "/path/to/storage/framework/testing/pest-e2e/frontend/run-id",
+  "php_test": {
+    "file": "tests/Browser/UserProfileTest.php",
+    "name": "that an authenticated user can update their profile"
+  },
+  "failures": [
+    {
+      "name": "UserProfile can update their profile",
+      "js_file": "resources/js/e2e/userProfile.spec.ts",
+      "message": "locator.fill: Timeout 30000ms exceeded.",
+      "stack": "at userProfile.spec.ts:17:32"
+    }
+  ]
+}
+```
+
+When Playwright failures are unavailable, a top-level `error` object carries the PHP/runtime `message` and `stack`.
 
 ## Suggested implementation order
 

@@ -2,6 +2,10 @@ import { storageStatePath } from '../pest-e2e/playwright.mjs';
 
 export default {
   testDir: '.',
+  timeout: 5_000,
+  expect: {
+    timeout: 5_000,
+  },
   outputDir: `.pest-e2e/${process.env.PEST_E2E_RUN_ID || 'default'}/playwright-output`,
   globalSetup: './global-setup.mjs',
   reporter: [
@@ -11,6 +15,8 @@ export default {
   use: {
     baseURL: process.env.APP_URL || 'http://localhost',
     testIdAttribute: 'data-test',
+    actionTimeout: 5_000,
+    navigationTimeout: 5_000,
     storageState: storageStatePath(),
     connectOptions: process.env.PEST_E2E_WARM_WS_ENDPOINT
       ? { wsEndpoint: process.env.PEST_E2E_WARM_WS_ENDPOINT }

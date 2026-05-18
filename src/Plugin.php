@@ -11,9 +11,14 @@ use Symfony\Component\Console\Output\OutputInterface;
 use ValcuAndrei\PestE2E\Collision\Events;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\Runners\ServerRunner;
+use ValcuAndrei\PestE2E\Support\AgentOutput;
+use ValcuAndrei\PestE2E\Support\AgentOutputAggregator;
+use ValcuAndrei\PestE2E\Support\AgentOutputSummary;
+use ValcuAndrei\PestE2E\Support\AgentParallelMode;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
+use ValcuAndrei\PestE2E\Support\ParallelWorker;
 
 /**
  * @internal
@@ -57,6 +62,15 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
     {
         CliOptions::fromArguments($arguments);
 
+        if (CliOptions::agentOutput()) {
+            AgentOutput::silenceTestRunnerOutput();
+            $arguments = CliOptions::ensureNoOutput($arguments);
+
+            if (AgentParallelMode::isCoordinator($arguments)) {
+                AgentParallelMode::activateCoordinator();
+            }
+        }
+
         return CliOptions::filterArguments($arguments);
     }
 
@@ -65,6 +79,12 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
      */
     public function addOutput(int $exitCode): int
     {
+        if (CliOptions::agentOutput()) {
+            $this->emitAgentSummaries($this->resolveStore());
+
+            return $exitCode;
+        }
+
         $store = $this->resolveStore();
 
         if (! $store instanceof E2EOutputStore) {
@@ -164,6 +184,14 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
     {
         $this->resolveStore()?->flush();
         ServerRunner::stopAll();
+
+        if (
+            ! AgentParallelMode::isParatestWorker()
+            && ! ParallelWorker::isParallel()
+            && (CliOptions::agentOutput() || AgentOutputAggregator::hasActiveRun())
+        ) {
+            AgentOutputAggregator::cleanup();
+        }
     }
 
     /**
@@ -186,8 +214,37 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
         return [$parent, array_slice($lines, 1)];
     }
 
+    private function emitAgentSummaries(?E2EOutputStore $store): void
+    {
+        $entries = AgentOutputAggregator::collect();
+
+        if ($entries === [] && $store instanceof E2EOutputStore) {
+            foreach ($store->getAllPerTestEntries() as $perTestEntries) {
+                foreach ($perTestEntries as $entry) {
+                    $entries[] = $entry;
+                }
+            }
+
+            $store->flushPerTestEntries();
+            $entries = array_merge($entries, $store->flush());
+        } elseif ($store instanceof E2EOutputStore) {
+            $store->flushPerTestEntries();
+            $store->flush();
+        }
+
+        fwrite(STDOUT, PHP_EOL);
+
+        foreach ($entries as $entry) {
+            fwrite(STDOUT, AgentOutputSummary::encode($entry).PHP_EOL);
+        }
+    }
+
     private function shouldSuppress(E2EOutputEntryDTO $entry): bool
     {
+        if (CliOptions::agentOutput()) {
+            return true;
+        }
+
         return $entry->ok && CliOptions::suppressPassedOutput();
     }
 

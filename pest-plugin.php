@@ -29,6 +29,7 @@ use ValcuAndrei\PestE2E\Plugin as PestE2EPlugin;
 use ValcuAndrei\PestE2E\PublicApi\E2E;
 use ValcuAndrei\PestE2E\PublicApi\E2ETargetHandle;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Support\AgentOutputBootstrap;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
@@ -81,14 +82,25 @@ if (! function_exists('pestE2ERegisterPlugin')) {
             }
         }
 
-        if (! in_array(PestE2EPlugin::class, $plugins, true)) {
-            $plugins[] = PestE2EPlugin::class;
-            @file_put_contents($pluginFile, json_encode($plugins, JSON_PRETTY_PRINT));
+        if (in_array(PestE2EPlugin::class, $plugins, true)) {
+            return;
         }
+
+        $parallelIndex = array_search('Pest\\Plugins\\Parallel', $plugins, true);
+
+        if ($parallelIndex !== false) {
+            array_splice($plugins, $parallelIndex, 0, [PestE2EPlugin::class]);
+        } else {
+            $plugins[] = PestE2EPlugin::class;
+        }
+
+        @file_put_contents($pluginFile, json_encode($plugins, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 }
 
 pestE2ERegisterPlugin();
+
+AgentOutputBootstrap::boot();
 
 if (! function_exists('e2e')) {
     /**

@@ -21,6 +21,8 @@ final class CliOptions
 
     public static bool $parallel = false;
 
+    public static bool $agentOutput = false;
+
     public static ?string $packageManager = null;
 
     /**
@@ -30,11 +32,58 @@ final class CliOptions
      */
     public static function fromArguments(array $arguments): void
     {
-        self::$debug = in_array('--debug', $arguments, true);
-        self::$browse = in_array('--browse', $arguments, true) || in_array('--headed', $arguments, true) || self::$debug;
+        self::$debug = in_array('--debug', $arguments, true) || self::truthyEnv('PEST_E2E_DEBUG');
+        self::$browse = in_array('--browse', $arguments, true)
+            || in_array('--headed', $arguments, true)
+            || self::$debug
+            || self::truthyEnv('PEST_E2E_BROWSE');
         self::$compact = self::hasFlag($arguments, '--compact') || self::compactPrinterEnabled();
         self::$parallel = self::hasFlag($arguments, '--parallel') || ParallelWorker::isParallel();
-        self::$packageManager = self::parseRunUsing($arguments);
+        self::$agentOutput = self::hasFlag($arguments, '--pest-e2e-agent-output')
+            || self::hasFlag($arguments, '--pest-e2e-json');
+        self::$packageManager = self::parseRunUsing($arguments) ?? self::packageManagerFromEnv();
+    }
+
+    private static function packageManagerFromEnv(): ?string
+    {
+        $value = $_SERVER['PEST_E2E_PACKAGE_MANAGER'] ?? $_ENV['PEST_E2E_PACKAGE_MANAGER'] ?? getenv('PEST_E2E_PACKAGE_MANAGER');
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        if (! in_array($value, self::VALID_PACKAGE_MANAGERS, true)) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Whether E2E output should use PAO-style compact JSON for agents.
+     */
+    public static function agentOutput(): bool
+    {
+        if (AgentOutput::explicitlyDisabled()) {
+            return false;
+        }
+
+        return self::$agentOutput || AgentOutput::enabled();
+    }
+
+    /**
+     * @param  array<int, mixed>  $arguments
+     * @return array<int, mixed>
+     */
+    public static function ensureNoOutput(array $arguments): array
+    {
+        if (in_array('--no-output', $arguments, true)) {
+            return $arguments;
+        }
+
+        $arguments[] = '--no-output';
+
+        return $arguments;
     }
 
     /**
@@ -42,6 +91,10 @@ final class CliOptions
      */
     public static function suppressPassedOutput(): bool
     {
+        if (self::agentOutput()) {
+            return true;
+        }
+
         if (self::$compact) {
             return true;
         }
@@ -130,7 +183,7 @@ final class CliOptions
      */
     public static function filterArguments(array $arguments): array
     {
-        $exactKeys = ['--browse', '--headed', '--debug'];
+        $exactKeys = ['--browse', '--headed', '--debug', '--pest-e2e-agent-output', '--pest-e2e-json'];
 
         $filtered = array_filter($arguments, function (mixed $arg) use ($exactKeys): bool {
             if (! is_string($arg)) {
@@ -153,6 +206,6 @@ final class CliOptions
      */
     public static function optionKeys(): array
     {
-        return ['--browse', '--headed', '--debug'];
+        return ['--browse', '--headed', '--debug', '--pest-e2e-agent-output', '--pest-e2e-json'];
     }
 }

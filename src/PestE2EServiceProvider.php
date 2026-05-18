@@ -13,6 +13,8 @@ use ValcuAndrei\PestE2E\Contracts\E2EAuthActionContract;
 use ValcuAndrei\PestE2E\Contracts\ParamsFileWriterContract;
 use ValcuAndrei\PestE2E\Contracts\RunIdGeneratorContract;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Support\AgentOutputIntent;
+use ValcuAndrei\PestE2E\Support\ArtisanTestArgvBridge;
 use ValcuAndrei\PestE2E\Support\CacheAuthTicketStore;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
@@ -49,6 +51,8 @@ final class PestE2EServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
+            ArtisanTestArgvBridge::apply();
+            AgentOutputIntent::persistFromEnvironment();
             $this->publishes([
                 __DIR__.'/../config/pest-e2e.php' => config_path('pest-e2e.php'),
             ], 'pest-e2e-config');

@@ -236,15 +236,11 @@ final class PlaywrightParser implements JsonParserContract
             ? $errors[0]['message']
             : 'Test failed';
 
-        $stack = is_string($errors[0]['stack'] ?? null) ? $errors[0]['stack'] : null;
-        if ($stack !== null && $stack !== '') {
-            $lines = preg_split('/\r\n|\r|\n/', $stack);
-            if (is_array($lines)) {
-                $message .= "\n\nStack trace:\n".implode("\n", array_slice($lines, 0, 10));
-            }
-        }
+        $stack = is_string($errors[0]['stack'] ?? null) && $errors[0]['stack'] !== ''
+            ? $errors[0]['stack']
+            : null;
 
-        return new JsonReportErrorDTO(message: trim($message));
+        return new JsonReportErrorDTO(message: trim($message), stack: $stack);
     }
 
     /**

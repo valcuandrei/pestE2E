@@ -10,6 +10,16 @@ afterEach(function (): void {
     }
 });
 
+it('resolves a run directory path without creating it', function (): void {
+    $this->reportBaseDir = sys_get_temp_dir().'/pest-e2e-report-resolve-'.uniqid();
+    config()->set('pest-e2e.reports.base_dir', $this->reportBaseDir);
+
+    $dir = (new ReportDirectoryManager)->resolveRunDirectory('frontend', 'run-123');
+
+    expect($dir)->toBe($this->reportBaseDir.'/frontend/run-123')
+        ->and(is_dir($dir))->toBeFalse();
+});
+
 it('creates a target and run scoped report directory', function (): void {
     $this->reportBaseDir = sys_get_temp_dir().'/pest-e2e-report-dir-'.uniqid();
     config()->set('pest-e2e.reports.base_dir', $this->reportBaseDir);

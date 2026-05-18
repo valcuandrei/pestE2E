@@ -13,6 +13,11 @@ final class ReportDirectoryManager
 {
     private const RUN_MARKER = '.pest-e2e-run';
 
+    public function resolveRunDirectory(string $target, string $runId): string
+    {
+        return $this->runDirectory($this->baseDir(), $target, $runId);
+    }
+
     public function prepare(string $target, string $runId): string
     {
         $baseDir = $this->baseDir();

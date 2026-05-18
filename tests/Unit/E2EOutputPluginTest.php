@@ -2,21 +2,74 @@
 
 declare(strict_types=1);
 
+use NunoMaduro\Collision\Adapters\Phpunit\Printers\DefaultPrinter;
 use Symfony\Component\Console\Output\BufferedOutput;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
+use ValcuAndrei\PestE2E\DTO\JsonReportStatsDTO;
 use ValcuAndrei\PestE2E\Plugin;
+use ValcuAndrei\PestE2E\Support\AgentOutputAggregator;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
 beforeEach(function (): void {
+    AgentOutputAggregator::cleanup();
+    unset(
+        $_SERVER['PAO_FORCE'],
+        $_SERVER['PEST_E2E_AGENT_OUTPUT'],
+        $_SERVER['PAO_DISABLE'],
+        $_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE'],
+        $_SERVER['CURSOR_AGENT'],
+        $_SERVER['COLLISION_PRINTER_COMPACT'],
+        $_ENV['COLLISION_PRINTER_COMPACT'],
+    );
+    putenv('PAO_FORCE');
+    putenv('PEST_E2E_AGENT_OUTPUT');
+    putenv('PAO_DISABLE');
+    putenv('PEST_E2E_AGENT_OUTPUT_DISABLE');
+    putenv('CURSOR_AGENT');
+    putenv('COLLISION_PRINTER_COMPACT');
+
+    $_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE'] = '1';
+
+    if (class_exists(DefaultPrinter::class)) {
+        DefaultPrinter::compact(false);
+    }
+
     CliOptions::$browse = false;
     CliOptions::$debug = false;
     CliOptions::$compact = false;
     CliOptions::$parallel = false;
+    CliOptions::$agentOutput = false;
 
     app(E2EOutputStore::class)->flush();
     app(E2EOutputStore::class)->flushPerTestEntries();
+});
+
+afterEach(function (): void {
+    AgentOutputAggregator::cleanup();
+});
+
+it('emits compact json summaries in agent output mode', function (): void {
+    unset($_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE']);
+    putenv('PEST_E2E_AGENT_OUTPUT_DISABLE');
+    $_SERVER['PEST_E2E_AGENT_OUTPUT'] = '1';
+
+    $store = app(E2EOutputStore::class);
+    $store->add(
+        lines: ['verbose e2e line'],
+        type: 'run',
+        target: 'frontend',
+        runId: 'run-agent',
+        ok: false,
+        durationSeconds: 1.163,
+        stats: new JsonReportStatsDTO(passed: 3, failed: 1, skipped: 0, durationMs: 1163),
+        reportDirectory: '/tmp/pest-e2e/reports/frontend/run-agent',
+    );
+
+    (new Plugin(new BufferedOutput))->addOutput(1);
+
+    expect(app(E2EOutputStore::class)->flush())->toBe([]);
 });
 
 it('flushes output store via the Pest plugin', function () {
