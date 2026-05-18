@@ -6,6 +6,7 @@ namespace ValcuAndrei\PestE2E\Collision;
 
 use NunoMaduro\Collision\Adapters\Phpunit\TestResult;
 use Symfony\Component\Console\Output\OutputInterface;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
 /**
@@ -53,6 +54,10 @@ final class Events
         }
 
         foreach ($entries as $entry) {
+            if ($entry->ok && CliOptions::suppressPassedOutput()) {
+                continue;
+            }
+
             $lines = $entry->lines;
             $counter = count($lines);
 

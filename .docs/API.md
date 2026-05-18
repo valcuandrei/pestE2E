@@ -27,6 +27,8 @@ e2e()->target('frontend', fn ($p) => $p
 
 **Parallel runs:** Supported via Pest / Laravel `--parallel`. Each worker gets a dedicated port (`parallel.base_port` + `TEST_TOKEN`), worker-scoped auth tickets, and `APP_URL` passed to Playwright. Requires per-worker databases (`{database}_test_{TEST_TOKEN}`) using Laravel’s parallel testing traits.
 
+**Output noise control:** Normal runs print E2E details for passed and failed targets. `--compact` and `--parallel` suppress passed E2E details, but failed E2E details are always printed.
+
 ### Filtering (runner-specific)
 
 ```php

@@ -9,6 +9,7 @@ use Pest\Contracts\Plugins\HandlesArguments;
 use Pest\Contracts\Plugins\Terminable;
 use Symfony\Component\Console\Output\OutputInterface;
 use ValcuAndrei\PestE2E\Collision\Events;
+use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\Runners\ServerRunner;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
@@ -78,6 +79,10 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
 
             foreach ($perTestEntries as $entries) {
                 foreach ($entries as $entry) {
+                    if ($this->shouldSuppress($entry)) {
+                        continue;
+                    }
+
                     $storedLines = $entry->lines;
                     $counter = count($storedLines);
 
@@ -101,7 +106,7 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
         $store->flushPerTestEntries();
 
         // Print any orphaned entries (fallback for entries not associated with a test)
-        $entries = $store->flush();
+        $entries = $this->filterEntries($store->flush());
 
         if ($entries !== []) {
             $lines = [];
@@ -179,5 +184,22 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
         }
 
         return [$parent, array_slice($lines, 1)];
+    }
+
+    private function shouldSuppress(E2EOutputEntryDTO $entry): bool
+    {
+        return $entry->ok && CliOptions::suppressPassedOutput();
+    }
+
+    /**
+     * @param  array<int, E2EOutputEntryDTO>  $entries
+     * @return array<int, E2EOutputEntryDTO>
+     */
+    private function filterEntries(array $entries): array
+    {
+        return array_values(array_filter(
+            $entries,
+            fn (E2EOutputEntryDTO $entry): bool => ! $this->shouldSuppress($entry),
+        ));
     }
 }

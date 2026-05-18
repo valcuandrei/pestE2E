@@ -349,6 +349,8 @@ sail artisan test
 php artisan test --parallel --processes=4
 ```
 
+Successful E2E detail output is shown in normal test runs. In `--compact` and `--parallel` runs, passed E2E details are suppressed so Pest output stays readable; failed E2E runs still print their details.
+
 ---
 
 # Debug & Headed Mode

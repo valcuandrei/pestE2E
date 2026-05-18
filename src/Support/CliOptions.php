@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Support;
 
+use NunoMaduro\Collision\Adapters\Phpunit\Printers\DefaultPrinter;
+
 /**
  * @internal
  */
@@ -14,6 +16,10 @@ final class CliOptions
     public static bool $browse = false;
 
     public static bool $debug = false;
+
+    public static bool $compact = false;
+
+    public static bool $parallel = false;
 
     public static ?string $packageManager = null;
 
@@ -26,7 +32,29 @@ final class CliOptions
     {
         self::$debug = in_array('--debug', $arguments, true);
         self::$browse = in_array('--browse', $arguments, true) || in_array('--headed', $arguments, true) || self::$debug;
+        self::$compact = self::hasFlag($arguments, '--compact') || self::compactPrinterEnabled();
+        self::$parallel = self::hasFlag($arguments, '--parallel') || ParallelWorker::isParallel();
         self::$packageManager = self::parseRunUsing($arguments);
+    }
+
+    /**
+     * Whether passed E2E output should be hidden to keep Pest output compact.
+     */
+    public static function suppressPassedOutput(): bool
+    {
+        if (self::$compact) {
+            return true;
+        }
+
+        if (self::$parallel) {
+            return true;
+        }
+
+        if (self::compactPrinterEnabled()) {
+            return true;
+        }
+
+        return ParallelWorker::isParallel();
     }
 
     /**
@@ -46,6 +74,52 @@ final class CliOptions
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<int, mixed>  $arguments
+     */
+    private static function hasFlag(array $arguments, string $flag): bool
+    {
+        foreach ($arguments as $arg) {
+            if (! is_string($arg)) {
+                continue;
+            }
+
+            if ($arg === $flag || str_starts_with($arg, $flag.'=')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function compactPrinterEnabled(): bool
+    {
+        if (self::truthyEnv('COLLISION_PRINTER_COMPACT')) {
+            return true;
+        }
+
+        if (class_exists(DefaultPrinter::class)) {
+            try {
+                return DefaultPrinter::compact();
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static function truthyEnv(string $key): bool
+    {
+        $value = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+
+        if (! is_string($value) && ! is_int($value) && ! is_bool($value)) {
+            return false;
+        }
+
+        return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
     }
 
     /**

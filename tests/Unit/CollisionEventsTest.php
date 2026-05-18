@@ -8,13 +8,22 @@ use ValcuAndrei\PestE2E\Collision\Events;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\Plugin;
+use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
 
+beforeEach(function (): void {
+    CliOptions::$browse = false;
+    CliOptions::$debug = false;
+    CliOptions::$compact = false;
+    CliOptions::$parallel = false;
+
+    app(E2EOutputStore::class)->flush();
+    app(E2EOutputStore::class)->flushPerTestEntries();
+});
+
 it('prints inline e2e output after the test line and does not repeat at the end', function () {
     $store = app(E2EOutputStore::class);
-    $store->flush();
-    $store->flushPerTestEntries();
 
     $formatter = new E2EOutputFormatter;
     $parentTestName = 'prints inline output';
@@ -68,6 +77,60 @@ it('prints inline e2e output after the test line and does not repeat at the end'
     $plugin->addOutput(0);
 
     expect($pluginOutput->fetch())->toBe('');
+});
+
+it('suppresses passed inline e2e output in compact mode', function (): void {
+    $store = app(E2EOutputStore::class);
+    CliOptions::fromArguments(['--compact']);
+
+    $entry = new E2EOutputEntryDTO(
+        type: 'run',
+        target: 'frontend',
+        runId: 'run-compact-inline',
+        ok: true,
+        durationSeconds: 0.12,
+        stats: null,
+        lines: ['inline parent', 'passed inline e2e line'],
+    );
+
+    $testId = 'test-id-compact-pass';
+    $store->putForTest($testId, $entry);
+
+    $output = new BufferedOutput;
+    Events::setOutput($output);
+    $output->writeln('✓ inline parent');
+
+    Events::afterTestMethodDescription(makeTestResult($testId));
+
+    expect($output->fetch())->toBe('✓ inline parent'.PHP_EOL)
+        ->and($store->getForTest($testId))->toBe([]);
+});
+
+it('keeps failed inline e2e output in parallel mode', function (): void {
+    $store = app(E2EOutputStore::class);
+    CliOptions::fromArguments(['--parallel']);
+
+    $entry = new E2EOutputEntryDTO(
+        type: 'run',
+        target: 'frontend',
+        runId: 'run-parallel-inline-fail',
+        ok: false,
+        durationSeconds: 0.12,
+        stats: null,
+        lines: ['inline parent', 'failed inline e2e line'],
+    );
+
+    $testId = 'test-id-parallel-fail';
+    $store->putForTest($testId, $entry);
+
+    $output = new BufferedOutput;
+    Events::setOutput($output);
+    $output->writeln('✗ inline parent');
+
+    Events::afterTestMethodDescription(makeTestResult($testId));
+
+    expect($output->fetch())->toContain('failed inline e2e line')
+        ->and($store->getForTest($testId))->toBe([]);
 });
 
 function makeTestResult(string $testId): TestResult

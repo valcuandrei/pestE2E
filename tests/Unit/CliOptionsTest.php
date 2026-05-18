@@ -5,8 +5,13 @@ declare(strict_types=1);
 use ValcuAndrei\PestE2E\Support\CliOptions;
 
 beforeEach(function (): void {
+    unset($_SERVER['COLLISION_PRINTER_COMPACT'], $_ENV['COLLISION_PRINTER_COMPACT']);
+    putenv('COLLISION_PRINTER_COMPACT');
+
     CliOptions::$browse = false;
     CliOptions::$debug = false;
+    CliOptions::$compact = false;
+    CliOptions::$parallel = false;
     CliOptions::$packageManager = null;
 });
 
@@ -44,6 +49,29 @@ it('ignores empty --run-using value', function (): void {
     CliOptions::fromArguments(['--run-using=']);
 
     expect(CliOptions::$packageManager)->toBeNull();
+});
+
+it('detects compact output mode', function (): void {
+    CliOptions::fromArguments(['tests/Browser', '--compact']);
+
+    expect(CliOptions::$compact)->toBeTrue()
+        ->and(CliOptions::suppressPassedOutput())->toBeTrue();
+});
+
+it('detects compact output mode from collision printer env', function (): void {
+    $_SERVER['COLLISION_PRINTER_COMPACT'] = 'true';
+
+    CliOptions::fromArguments(['tests/Browser']);
+
+    expect(CliOptions::$compact)->toBeTrue()
+        ->and(CliOptions::suppressPassedOutput())->toBeTrue();
+});
+
+it('detects parallel output mode', function (): void {
+    CliOptions::fromArguments(['tests/Browser', '--parallel']);
+
+    expect(CliOptions::$parallel)->toBeTrue()
+        ->and(CliOptions::suppressPassedOutput())->toBeTrue();
 });
 
 it('filterArguments removes --browse, --headed, --debug', function (): void {

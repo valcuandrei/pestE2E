@@ -53,7 +53,7 @@ current run is never deleted
 
 ---
 
-### Milestone 3 — CLI output noise control
+### [X] Milestone 3 — CLI output noise control
 
 **Goal:** successful E2E output should not spam compact/parallel runs.
 
