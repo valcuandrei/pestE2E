@@ -34,4 +34,9 @@ jobs:
       run: composer update --${{ matrix.dependency-version }} --no-interaction --no-progress --ansi
 
     - name: Run all tests
-      run: composer run test
+      run: |
+        if [ "${{ matrix.dependency-version }}" = "prefer-stable" ] && [ "${{ matrix.parallel }}" = "" ]; then
+          composer run test
+        else
+          vendor/bin/pest ${{ matrix.parallel }}
+        fi
