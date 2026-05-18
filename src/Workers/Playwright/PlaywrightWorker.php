@@ -10,7 +10,7 @@ use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessResultDTO;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
-use ValcuAndrei\PestE2E\Support\ParallelWorker;
+use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
 
 final class PlaywrightWorker implements JsWorkerContract
 {
@@ -112,7 +112,7 @@ final class PlaywrightWorker implements JsWorkerContract
 
         if ($targetDir === null) {
             $base = rtrim(sys_get_temp_dir(), '/').'/pest-e2e/playwright-output';
-            $targetDir = $base.'/'.md5($plan->command->workingDirectory).ParallelWorker::pathSuffix();
+            $targetDir = $base.'/'.md5($plan->command->workingDirectory).ParallelWorkerContext::pathSuffix();
         }
 
         if (! is_dir($targetDir) && ! @mkdir($targetDir, 0775, true) && ! is_dir($targetDir)) {

@@ -62,15 +62,37 @@ Browser tests that call `e2e()->…->run()` can run with Pest / Laravel parallel
 php artisan test --parallel --processes=4
 ```
 
-Each worker gets:
+#### Required `.env.testing` setup
 
-* a **dedicated HTTP port** (`PEST_E2E_PARALLEL_BASE_PORT` + `TEST_TOKEN`, default base `8800`)
-* **worker-scoped auth ticket cache keys** (no cross-worker ticket bleed)
+Use a real test database (MySQL or PostgreSQL), not SQLite in-memory. Laravel parallel testing creates one database per worker (`testing_test_1`, `testing_test_2`, …). Recommended overrides:
+
+```dotenv
+SESSION_DRIVER=array
+CACHE_STORE=array
+QUEUE_CONNECTION=sync
+DB_DATABASE=testing
+```
+
+Run with `--recreate-databases` when bootstrapping worker databases for the first time.
+
+#### Per-worker isolation
+
+Each Pest worker process gets:
+
+* its own **managed Laravel server** on a dedicated port
 * **`APP_URL` / `baseUrl`** passed to Playwright matching that port
+* **worker-scoped auth ticket cache keys** (no cross-worker ticket bleed)
+* the same **`DB_*` / `CACHE_PREFIX` env** as the PHP test worker (including `testing_test_{TEST_TOKEN}`)
 
-**Database per worker (required):** use Laravel’s parallel database support (`RefreshDatabase`, `DatabaseMigrations`, etc.) so each worker uses `{database}_test_{TEST_TOKEN}`. The managed server subprocess receives the same `DB_DATABASE` and `CACHE_PREFIX` as the worker. Without per-worker databases, parallel E2E will hit unique constraint violations and flaky auth.
+Default port formula when `server.parallel_port_offset` is enabled:
 
-Configure the base port in `config/pest-e2e.php` under `parallel.base_port` or via `PEST_E2E_PARALLEL_BASE_PORT` in `.env.testing`.
+```text
+server.port + TEST_TOKEN
+```
+
+Example with base port `8800`: worker `1` → `8801`, worker `4` → `8804`. Serial (non-parallel) runs keep using an ephemeral free port.
+
+Configure the base port in `config/pest-e2e.php` under `server.port` (or legacy `parallel.base_port`) or via `PEST_E2E_SERVER_PORT` / `PEST_E2E_PARALLEL_BASE_PORT` in `.env.testing`. Set `server.host` / `PEST_E2E_SERVER_HOST` when the app must bind to a specific interface.
 
 ---
 
@@ -467,6 +489,9 @@ Key config keys in `config/pest-e2e.php`:
 | `auth.ttl_seconds` | Auth ticket TTL (default: 60) |
 | `auth.header.name` / `auth.header.value` | Header required for auth requests (default: `X-Pest-E2E: 1`) |
 | `server.driver` | Server runner: `artisan` or `php_builtin` (default: `php_builtin`) |
+| `server.host` | Bind address for the managed server (default: `127.0.0.1`) |
+| `server.port` | Base HTTP port for parallel workers (default: `8800`) |
+| `server.parallel_port_offset` | When true, parallel workers use `server.port + TEST_TOKEN` (default: `true`) |
 | `reports.base_dir` | Base directory for Playwright artifacts (default: `storage/framework/testing/pest-e2e`) |
 | `reports.prune.enabled` | Enable old run pruning (default: `true`) |
 | `reports.prune.keep_runs` | Number of most recent marked runs to keep (default: 50) |
@@ -475,7 +500,7 @@ Key config keys in `config/pest-e2e.php`:
 | `js_runner.driver` | JS runner (default: `playwright`) |
 | `js_runner.mode` | Runner mode: `cold` or `warm` (default: `cold`) |
 | `package_manager` | Package manager for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` (default: set in E2ETestCase during install, overridable via `--run-using`) |
-| `parallel.base_port` | Base HTTP port for parallel workers (`base_port` + `TEST_TOKEN`, default `8800`) |
+| `parallel.base_port` | Deprecated alias for `server.port` |
 | `agent_output` | Force agent JSON output (default: from `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` env) |
 | `bindings` | Contract-to-implementation map for swapping the JS runner. Keys: `JsWorkerContract::class`, `JsonParserContract::class`. Default: Playwright. Override to use Cypress, Puppeteer, etc. |
 

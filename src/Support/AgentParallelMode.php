@@ -20,7 +20,7 @@ final class AgentParallelMode
      */
     public static function isCoordinator(array $arguments): bool
     {
-        if (ParallelWorker::isParallel() || self::isParatestWorker()) {
+        if (ParallelWorkerContext::isParallel() || self::isParatestWorker()) {
             return false;
         }
 
@@ -67,7 +67,7 @@ final class AgentParallelMode
             return false;
         }
 
-        if (ParallelWorker::isParallel() || self::isParatestWorker()) {
+        if (ParallelWorkerContext::isParallel() || self::isParatestWorker()) {
             return true;
         }
 

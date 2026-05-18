@@ -7,7 +7,7 @@ namespace ValcuAndrei\PestE2E\Runners;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
-use ValcuAndrei\PestE2E\Support\ParallelWorker;
+use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
 
 /**
  * @internal
@@ -23,13 +23,15 @@ final class ServerRunner
 
     private ?Process $process = null;
 
-    private string $host = '127.0.0.1';
+    private readonly string $host;
 
     private int $port = 0;
 
     private function __construct(
         private readonly ServerRunnerType $type = ServerRunnerType::ARTISAN,
-    ) {}
+    ) {
+        $this->host = ParallelWorkerContext::serverHostFromConfig();
+    }
 
     /**
      * Get the instance of the server runner.
@@ -95,7 +97,7 @@ final class ServerRunner
 
         $publicPath = $basePath.'/public';
 
-        $env = array_merge($_ENV, ParallelWorker::serverEnvironment(), [
+        $env = array_merge($_ENV, ParallelWorkerContext::serverEnvironment(), [
             'APP_ENV' => 'testing',
             'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
             'APP_URL' => $this->baseUrl(),
@@ -304,7 +306,7 @@ final class ServerRunner
      */
     private function resolvePort(): int
     {
-        $parallelPort = ParallelWorker::serverPort();
+        $parallelPort = ParallelWorkerContext::serverPort();
 
         if ($parallelPort !== null) {
             return $parallelPort;

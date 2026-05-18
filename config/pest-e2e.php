@@ -22,10 +22,14 @@ return [
     ],
     'server' => [
         'driver' => env('PEST_E2E_SERVER_DRIVER', 'php_builtin'), // php_builtin or artisan
+        'host' => env('PEST_E2E_SERVER_HOST', '127.0.0.1'),
+        'port' => (int) env('PEST_E2E_SERVER_PORT', env('PEST_E2E_PARALLEL_BASE_PORT', 8800)),
+        // When true, parallel workers bind to server.port + TEST_TOKEN (e.g. 8801, 8802).
+        'parallel_port_offset' => filter_var(env('PEST_E2E_SERVER_PARALLEL_PORT_OFFSET', true), FILTER_VALIDATE_BOOL),
     ],
     'parallel' => [
-        // Each parallel worker uses base_port + TEST_TOKEN (e.g. 8801, 8802, …).
-        'base_port' => (int) env('PEST_E2E_PARALLEL_BASE_PORT', 8800),
+        // Deprecated alias for server.port — kept for backward compatibility.
+        'base_port' => (int) env('PEST_E2E_PARALLEL_BASE_PORT', env('PEST_E2E_SERVER_PORT', 8800)),
     ],
     'reports' => [
         'base_dir' => storage_path('framework/testing/pest-e2e'),

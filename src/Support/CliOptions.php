@@ -38,7 +38,7 @@ final class CliOptions
             || self::$debug
             || self::truthyEnv('PEST_E2E_BROWSE');
         self::$compact = self::hasFlag($arguments, '--compact') || self::compactPrinterEnabled();
-        self::$parallel = self::hasFlag($arguments, '--parallel') || ParallelWorker::isParallel();
+        self::$parallel = self::hasFlag($arguments, '--parallel') || ParallelWorkerContext::isParallel();
         self::$agentOutput = self::hasFlag($arguments, '--pest-e2e-agent-output')
             || self::hasFlag($arguments, '--pest-e2e-json');
         self::$packageManager = self::parseRunUsing($arguments) ?? self::packageManagerFromEnv();
@@ -107,7 +107,7 @@ final class CliOptions
             return true;
         }
 
-        return ParallelWorker::isParallel();
+        return ParallelWorkerContext::isParallel();
     }
 
     /**

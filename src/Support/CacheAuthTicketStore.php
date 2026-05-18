@@ -85,7 +85,7 @@ final class CacheAuthTicketStore implements AuthTicketStoreContract
      */
     private function key(string $ticket): string
     {
-        $prefix = ParallelWorker::token();
+        $prefix = ParallelWorkerContext::token();
 
         if ($prefix === null) {
             return 'pest-e2e:auth-ticket:'.$ticket;
@@ -165,7 +165,7 @@ final class CacheAuthTicketStore implements AuthTicketStoreContract
 
     private function ticketDirectory(): string
     {
-        return rtrim(sys_get_temp_dir(), '/').'/pest-e2e/auth-tickets'.ParallelWorker::pathSuffix();
+        return rtrim(sys_get_temp_dir(), '/').'/pest-e2e/auth-tickets'.ParallelWorkerContext::pathSuffix();
     }
 
     private function ticketPath(string $ticket): string

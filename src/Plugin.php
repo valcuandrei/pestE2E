@@ -18,7 +18,7 @@ use ValcuAndrei\PestE2E\Support\AgentParallelMode;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
-use ValcuAndrei\PestE2E\Support\ParallelWorker;
+use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
 
 /**
  * @internal
@@ -187,7 +187,7 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
 
         if (
             ! AgentParallelMode::isParatestWorker()
-            && ! ParallelWorker::isParallel()
+            && ! ParallelWorkerContext::isParallel()
             && (CliOptions::agentOutput() || AgentOutputAggregator::hasActiveRun())
         ) {
             AgentOutputAggregator::cleanup();

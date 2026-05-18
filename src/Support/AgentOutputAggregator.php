@@ -166,7 +166,7 @@ final class AgentOutputAggregator
 
     private static function workerSegment(): string
     {
-        $token = ParallelWorker::token();
+        $token = ParallelWorkerContext::token();
 
         if ($token === null || $token === '') {
             return '0';

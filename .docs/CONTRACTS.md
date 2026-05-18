@@ -13,7 +13,8 @@ Injected into every Node process:
 
 **Process model:** E2E runs are parallel-safe when each Pest / Paratest worker has isolated resources:
 
-- `TEST_TOKEN` — detected from the environment; drives port (`parallel.base_port` + token), cache key prefix, and temp paths
+- `TEST_TOKEN` — detected from `$_SERVER`, `$_ENV`, `env()`, or `getenv()`; drives port (`server.port` + token when `server.parallel_port_offset` is true), cache key prefix, and temp paths
+- `DB_*` — managed server subprocess receives the worker’s resolved connection settings (`DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`) from Laravel config
 - `DB_DATABASE` — must follow Laravel’s `{database}_test_{TEST_TOKEN}` convention (use `RefreshDatabase` / `DatabaseMigrations` with parallel testing)
 - `APP_URL` — set per run to the worker’s managed server URL and injected into Playwright env
 - Report directory — resolved per run as `{reports.base_dir}/{target}/{runId}`

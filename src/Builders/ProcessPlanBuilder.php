@@ -13,7 +13,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Support\CliOptions;
-use ValcuAndrei\PestE2E\Support\ParallelWorker;
+use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
 
 /**
  * @internal
@@ -65,7 +65,7 @@ final readonly class ProcessPlanBuilder
             $injected['PEST_E2E_REPORT_DIR'] = $context->reportDirectory;
         }
 
-        if (($token = ParallelWorker::token()) !== null) {
+        if (($token = ParallelWorkerContext::token()) !== null) {
             $injected['TEST_TOKEN'] = $token;
         }
 
