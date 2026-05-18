@@ -178,7 +178,7 @@ final class ReportDirectoryManager
             if (is_file($marker)) {
                 $runs[] = [
                     'path' => $path,
-                    'mtime' => filemtime($marker) ?: filemtime($path) ?: 0,
+                    'mtime' => (filemtime($marker) ?: filemtime($path)) ?: 0,
                 ];
             }
         }

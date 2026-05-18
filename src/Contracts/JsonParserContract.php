@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ValcuAndrei\PestE2E\Contracts;
 
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;

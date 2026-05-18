@@ -20,6 +20,8 @@ beforeEach(function (): void {
         $_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE'],
         $_SERVER['CURSOR_AGENT'],
         $_SERVER['COLLISION_PRINTER_COMPACT'],
+        $_SERVER['TEST_TOKEN'],
+        $_ENV['TEST_TOKEN'],
         $_ENV['COLLISION_PRINTER_COMPACT'],
     );
     putenv('PEST_E2E_AGENT_OUTPUT');
@@ -27,6 +29,7 @@ beforeEach(function (): void {
     putenv('PEST_E2E_AGENT_OUTPUT_DISABLE');
     putenv('CURSOR_AGENT');
     putenv('COLLISION_PRINTER_COMPACT');
+    putenv('TEST_TOKEN');
 
     $_SERVER['PEST_E2E_AGENT_OUTPUT_DISABLE'] = '1';
 
