@@ -61,6 +61,10 @@ final readonly class ProcessPlanBuilder
             'PEST_E2E_RUN_ID' => $context->runId,
         ];
 
+        if ($context->reportDirectory !== null) {
+            $injected['PEST_E2E_REPORT_DIR'] = $context->reportDirectory;
+        }
+
         if (($token = ParallelWorker::token()) !== null) {
             $injected['TEST_TOKEN'] = $token;
         }
@@ -80,6 +84,7 @@ final readonly class ProcessPlanBuilder
             headed: $isHeaded,
             debug: CliOptions::$debug,
             commandPreview: $this->commandPreview($context->testFilter, $isHeaded, CliOptions::$debug),
+            reportDirectory: $context->reportDirectory,
         );
 
         if ($context->params === []) {
@@ -107,6 +112,7 @@ final readonly class ProcessPlanBuilder
                 debug: $plan->debug,
                 commandPreview: $plan->commandPreview,
                 params: $paramsDto,
+                reportDirectory: $plan->reportDirectory,
             )->withParamsJsonInline($json);
         }
 
@@ -124,6 +130,7 @@ final readonly class ProcessPlanBuilder
             debug: $plan->debug,
             commandPreview: $plan->commandPreview,
             params: $paramsDto,
+            reportDirectory: $plan->reportDirectory,
         )->withParamsJsonFilePath($filePath);
     }
 

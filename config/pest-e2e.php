@@ -27,6 +27,14 @@ return [
         // Each parallel worker uses base_port + TEST_TOKEN (e.g. 8801, 8802, …).
         'base_port' => (int) env('PEST_E2E_PARALLEL_BASE_PORT', 8800),
     ],
+    'reports' => [
+        'base_dir' => storage_path('framework/testing/pest-e2e'),
+        'prune' => [
+            'enabled' => env('PEST_E2E_REPORT_PRUNE_ENABLED', true),
+            'keep_runs' => (int) env('PEST_E2E_REPORT_PRUNE_KEEP_RUNS', 50),
+            'keep_days' => (int) env('PEST_E2E_REPORT_PRUNE_KEEP_DAYS', 7),
+        ],
+    ],
     'timing' => [
         'enabled' => env('PEST_E2E_TIMING', false),
     ],

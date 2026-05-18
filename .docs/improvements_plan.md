@@ -1,6 +1,6 @@
 ## Improvements and optimizations plan
 
-### Milestone 1 — Parallel-safe execution
+### [X] Milestone 1 — Parallel-safe execution
 
 **Goal:** make this work reliably:
 
@@ -26,23 +26,15 @@ runs browser tests without port collisions, DB collisions, or auth-ticket bleed.
 
 ---
 
-### Milestone 2 — Report directory + pruning
+### [X] Milestone 2 — Report directory + pruning
 
 **Goal:** stop Playwright reports from filling `resources/js/e2e`.
-
-Restore public API:
-
-```php
-e2e('frontend')
-    ->reportDir(storage_path('framework/testing/pest-e2e'))
-    ->run();
-```
 
 Add config:
 
 ```php
 'reports' => [
-    'dir' => storage_path('framework/testing/pest-e2e'),
+    'base_dir' => storage_path('framework/testing/pest-e2e'),
     'prune' => [
         'enabled' => true,
         'keep_runs' => 50,

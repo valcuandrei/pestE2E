@@ -19,6 +19,7 @@ final readonly class RunContextDTO
         public array $env,
         public array $params,
         public ?string $testFilter = null,
+        public ?string $reportDirectory = null,
     ) {}
 
     /**
@@ -33,6 +34,7 @@ final readonly class RunContextDTO
         array $env = [],
         array $params = [],
         ?string $testFilter = null,
+        ?string $reportDirectory = null,
     ): self {
         /** @var array<string, mixed> */
         $mergedParams = array_replace_recursive($target->params, $params);
@@ -43,6 +45,7 @@ final readonly class RunContextDTO
             env: array_replace($target->env, $env),
             params: $mergedParams,
             testFilter: $testFilter,
+            reportDirectory: $reportDirectory,
         );
     }
 
@@ -59,6 +62,7 @@ final readonly class RunContextDTO
             env: array_replace($this->env, $env),
             params: $this->params,
             testFilter: $this->testFilter,
+            reportDirectory: $this->reportDirectory,
         );
     }
 
@@ -78,6 +82,7 @@ final readonly class RunContextDTO
             env: $this->env,
             params: $mergedParams,
             testFilter: $this->testFilter,
+            reportDirectory: $this->reportDirectory,
         );
     }
 }

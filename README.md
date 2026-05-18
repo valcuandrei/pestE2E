@@ -426,6 +426,16 @@ Security:
 
 The package does **not** store JSON reports on disk. Playwright emits its JSON report to stdout; the PHP side parses it in memory and maps it to the canonical `pest-e2e.v1` schema.
 
+Playwright artifacts are written to a run-scoped directory:
+
+```text
+{reports.base_dir}/{target}/{runId}
+```
+
+Configure the base directory globally with `config('pest-e2e.reports.base_dir')`. The default is `storage/framework/testing/pest-e2e`.
+
+Old run directories are pruned according to `reports.prune`. Only directories marked as pestE2E runs are deleted, and the current run directory is never pruned.
+
 ---
 
 # Configuration
@@ -439,6 +449,10 @@ Key config keys in `config/pest-e2e.php`:
 | `auth.ttl_seconds` | Auth ticket TTL (default: 60) |
 | `auth.header.name` / `auth.header.value` | Header required for auth requests (default: `X-Pest-E2E: 1`) |
 | `server.driver` | Server runner: `artisan` or `php_builtin` (default: `php_builtin`) |
+| `reports.base_dir` | Base directory for Playwright artifacts (default: `storage/framework/testing/pest-e2e`) |
+| `reports.prune.enabled` | Enable old run pruning (default: `true`) |
+| `reports.prune.keep_runs` | Number of most recent marked runs to keep (default: 50) |
+| `reports.prune.keep_days` | Age window for marked runs to keep (default: 7) |
 | `timing.enabled` | Enable timing instrumentation (default: `false`, set via `PEST_E2E_TIMING`) |
 | `js_runner.driver` | JS runner (default: `playwright`) |
 | `js_runner.mode` | Runner mode: `cold` or `warm` (default: `cold`) |

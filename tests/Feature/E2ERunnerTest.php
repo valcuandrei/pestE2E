@@ -13,6 +13,7 @@ use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Runners\E2ERunner;
+use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 
 it('runs a target command and ingests the json report', function () {
@@ -73,6 +74,7 @@ it('runs a target command and ingests the json report', function () {
         jsWorker: $worker,
         reportReader: $reportReader,
         runIdGenerator: $runIdGenerator,
+        reportDirectoryManager: new ReportDirectoryManager,
     );
 
     $report = $runner->run($targetName);

@@ -35,6 +35,24 @@ it('builds explicit execution flags even when there are no params', function () 
         ->and($plan->hasParams())->toBeFalse();
 });
 
+it('includes the resolved report directory in the plan and environment', function () {
+    $writer = fakeParamsFileWriter();
+    $builder = new ProcessPlanBuilder($writer);
+
+    $target = new TargetConfigDTO(
+        name: 'frontend',
+        dir: 'js',
+    );
+
+    $ctx = RunContextDTO::make($target, 'run-123', reportDirectory: '/tmp/pest-e2e/reports/frontend/run-123');
+
+    $plan = $builder->build($ctx);
+    $env = $plan->command->getMergedEnv();
+
+    expect($plan->reportDirectory)->toBe('/tmp/pest-e2e/reports/frontend/run-123')
+        ->and($env['PEST_E2E_REPORT_DIR'])->toBe('/tmp/pest-e2e/reports/frontend/run-123');
+});
+
 it('uses inline params when JSON is small enough', function () {
     $writer = fakeParamsFileWriter();
     $builder = (new ProcessPlanBuilder($writer))->withMaxInlineBytes(10_000);

@@ -87,7 +87,7 @@ final class PlaywrightWorker implements JsWorkerContract
         }
 
         $args[] = '--output';
-        $args[] = $this->playwrightOutputDirectory($plan->command->workingDirectory);
+        $args[] = $this->playwrightOutputDirectory($plan);
 
         $args[] = '--reporter';
         $args[] = 'json';
@@ -106,10 +106,14 @@ final class PlaywrightWorker implements JsWorkerContract
     /**
      * Get the Playwright output directory.
      */
-    private function playwrightOutputDirectory(string $workingDirectory): string
+    private function playwrightOutputDirectory(ProcessPlanDTO $plan): string
     {
-        $base = rtrim(sys_get_temp_dir(), '/').'/pest-e2e/playwright-output';
-        $targetDir = $base.'/'.md5($workingDirectory).ParallelWorker::pathSuffix();
+        $targetDir = $plan->reportDirectory;
+
+        if ($targetDir === null) {
+            $base = rtrim(sys_get_temp_dir(), '/').'/pest-e2e/playwright-output';
+            $targetDir = $base.'/'.md5($plan->command->workingDirectory).ParallelWorker::pathSuffix();
+        }
 
         if (! is_dir($targetDir) && ! @mkdir($targetDir, 0775, true) && ! is_dir($targetDir)) {
             throw new RuntimeException("Unable to create Playwright output directory: {$targetDir}");

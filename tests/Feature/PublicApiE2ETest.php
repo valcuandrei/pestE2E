@@ -16,6 +16,7 @@ use ValcuAndrei\PestE2E\PublicApi\E2ETargetHandle;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Runners\E2ERunner;
+use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 
 it('registers targets and resolves target handles via public api', function () {
@@ -46,6 +47,7 @@ it('registers targets and resolves target handles via public api', function () {
         jsWorker: $worker,
         reportReader: new JsonReportReader(new PlaywrightParser),
         runIdGenerator: $runIdGenerator,
+        reportDirectoryManager: new ReportDirectoryManager,
     );
     $authIssuer = new class implements AuthTicketIssuerContract
     {

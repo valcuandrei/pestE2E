@@ -5,6 +5,7 @@
 Injected into every Node process:
 - `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
+- `PEST_E2E_REPORT_DIR` (absolute path for runner artifacts)
 - `PEST_E2E_PARAMS` (JSON)
 - `PEST_E2E_PARAMS_FILE` (absolute path)
 
@@ -15,6 +16,7 @@ Injected into every Node process:
 - `TEST_TOKEN` — detected from the environment; drives port (`parallel.base_port` + token), cache key prefix, and temp paths
 - `DB_DATABASE` — must follow Laravel’s `{database}_test_{TEST_TOKEN}` convention (use `RefreshDatabase` / `DatabaseMigrations` with parallel testing)
 - `APP_URL` — set per run to the worker’s managed server URL and injected into Playwright env
+- Report directory — resolved per run as `{reports.base_dir}/{target}/{runId}`
 - Auth tickets — cache keys are scoped per worker to prevent cross-process consumption
 
 The package is **runner-agnostic**. Two contracts define the bridge:

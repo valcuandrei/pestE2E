@@ -69,5 +69,9 @@ The JS runner should POST the ticket to the configured auth route:
 ## Report handling
 
 Reports are parsed via `JsonParserContract` (default: `PlaywrightParser`).
-The JS runner emits JSON to stdout; the PHP side parses it in memory — no disk storage.
+The JS runner emits JSON to stdout; the PHP side parses it in memory.
 Swap the parser by rebinding `JsonParserContract` in `config('pest-e2e.bindings')`.
+
+Runner artifacts are written to `config('pest-e2e.reports.base_dir')/{target}/{runId}`.
+
+Pruning is controlled by `config('pest-e2e.reports.prune')`. The current run directory is never deleted.

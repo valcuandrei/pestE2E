@@ -17,6 +17,7 @@ use ValcuAndrei\PestE2E\DTO\RunContextDTO;
 use ValcuAndrei\PestE2E\Enums\TestStatusType;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
+use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
 
 /**
  * @internal
@@ -32,6 +33,7 @@ final readonly class E2ERunner
         private JsWorkerContract $jsWorker,
         private JsonReportReader $reportReader,
         private RunIdGeneratorContract $runIdGenerator,
+        private ReportDirectoryManager $reportDirectoryManager,
     ) {}
 
     /**
@@ -52,7 +54,11 @@ final readonly class E2ERunner
     ): JsonReportDTO {
         $target = $this->registry->get($targetName);
         $runId ??= $this->runIdGenerator->generate();
-        $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter);
+        $resolvedReportDir = $this->reportDirectoryManager->prepare(
+            target: $target->name,
+            runId: $runId,
+        );
+        $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter, $resolvedReportDir);
         $plan = $this->planBuilder->build($context, $options);
         $runResult = $this->jsWorker->run($plan);
 
