@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\Commands;
 
 use Illuminate\Console\Command;
+use ValcuAndrei\PestE2E\Install\EnvTestingConnectionResolver;
 use ValcuAndrei\PestE2E\Install\InstallContext;
 use ValcuAndrei\PestE2E\Install\InstallPlan;
 use ValcuAndrei\PestE2E\Install\InstallProjectProbe;
@@ -12,6 +13,7 @@ use ValcuAndrei\PestE2E\Install\InstallStep;
 use ValcuAndrei\PestE2E\Install\Steps\AddCsrfExclusionStep;
 use ValcuAndrei\PestE2E\Install\Steps\ConfigurePhpunitStep;
 use ValcuAndrei\PestE2E\Install\Steps\CreateEnvTestingStep;
+use ValcuAndrei\PestE2E\Install\Steps\CreateMysqlTestingDatabaseStep;
 use ValcuAndrei\PestE2E\Install\Steps\CreateTestingDatabaseStep;
 use ValcuAndrei\PestE2E\Install\Steps\MergeSailWslgHeadedComposeStep;
 use ValcuAndrei\PestE2E\Install\Steps\PlaywrightInstallStep;
@@ -160,6 +162,7 @@ final class InstallCommand extends Command
             new UpdatePestConfigStep,
             new PublishConfigStep,
             new CreateEnvTestingStep,
+            new CreateMysqlTestingDatabaseStep,
             new CreateTestingDatabaseStep,
             new ConfigurePhpunitStep,
             new MergeSailWslgHeadedComposeStep,
@@ -336,11 +339,41 @@ final class InstallCommand extends Command
      */
     private function shouldSetupTestingDatabase(): bool
     {
+        $connection = EnvTestingConnectionResolver::resolve(
+            $this->willSetupOrUpdateEnvTesting(),
+            (bool) $this->option('force'),
+            $this->hasOptionFlag('yes') || $this->hasOptionFlag('unattended'),
+        );
+
+        if ($connection !== 'sqlite') {
+            return false;
+        }
+
         if (InstallProjectProbe::testingDatabaseExists() && ! $this->hasOptionFlag('setup-testing-database')) {
             return false;
         }
 
         return $this->shouldAccept('setup-testing-database', 'Create database/testing.sqlite for SQLite tests?');
+    }
+
+    /**
+     * Whether `.env.testing` will be created or updated in this install run.
+     */
+    private function willSetupOrUpdateEnvTesting(): bool
+    {
+        if ($this->hasOptionFlag('setup-env-testing') || $this->hasOptionFlag('update-testing-env')) {
+            return true;
+        }
+
+        if ($this->hasOptionFlag('unattended') || $this->hasOptionFlag('yes')) {
+            return true;
+        }
+
+        if ($this->hasOptionFlag('no')) {
+            return false;
+        }
+
+        return $this->input->isInteractive();
     }
 
     /**

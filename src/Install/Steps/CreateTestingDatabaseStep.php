@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\Install\Steps;
 
 use Illuminate\Console\Command;
+use ValcuAndrei\PestE2E\Install\EnvTestingConnectionResolver;
 use ValcuAndrei\PestE2E\Install\InstallContext;
 use ValcuAndrei\PestE2E\Install\InstallProjectProbe;
 use ValcuAndrei\PestE2E\Install\InstallStep;
@@ -48,7 +49,17 @@ final class CreateTestingDatabaseStep extends InstallStep
      */
     public function afterSkipped(InstallContext $ctx): void
     {
-        if (! $ctx->isQuiet() && InstallProjectProbe::testingDatabaseExists()) {
+        if ($ctx->isQuiet()) {
+            return;
+        }
+
+        if (EnvTestingConnectionResolver::fromEnvTestingFile() !== 'sqlite'
+            && EnvTestingConnectionResolver::fromEnvTestingFile() !== ''
+            && ! InstallProjectProbe::testingDatabaseExists()) {
+            return;
+        }
+
+        if (InstallProjectProbe::testingDatabaseExists()) {
             $ctx->info('database/testing.sqlite already exists.');
         }
     }

@@ -76,6 +76,36 @@ final class InstallProjectProbe
     }
 
     /**
+     * @return array<string, string> Raw key => value pairs from an env file (unquoted values preserved).
+     */
+    public static function parseEnvFile(string $path): array
+    {
+        if (! is_file($path)) {
+            return [];
+        }
+
+        $content = file_get_contents($path);
+        if ($content === false) {
+            return [];
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $content);
+        if ($lines === false) {
+            return [];
+        }
+
+        $values = [];
+
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*([A-Za-z_]\w*)=(.*)$/', $line, $matches) === 1) {
+                $values[$matches[1]] = $matches[2];
+            }
+        }
+
+        return $values;
+    }
+
+    /**
      * Whether `phpunit.xml` still exposes DB/cache env elements (if none, `.env.testing` is considered in control).
      */
     public static function phpunitIsConfiguredForEnvTesting(): bool

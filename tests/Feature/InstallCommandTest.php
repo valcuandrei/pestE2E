@@ -218,7 +218,11 @@ it('updates Pest.php and publishes when --yes and Playwright not installed', fun
 
     expect(file_get_contents($this->tempDir.'/bootstrap/app.php'))->toContain('pest-e2e/auth/login');
     expect(file_exists($this->tempDir.'/.env.testing'))->toBeTrue();
-    expect(file_exists($this->tempDir.'/database/testing.sqlite'))->toBeTrue();
+    expect(file_exists($this->tempDir.'/database/testing.sqlite'))->toBeFalse();
+
+    $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
+    expect($pest)->toContain('RefreshDatabase')
+        ->and($pest)->toContain("->in('Feature')");
 });
 
 it('creates a parallel-safe .env.testing when missing', function (): void {
@@ -804,8 +808,27 @@ it('fails configure phpunit when xml is invalid', function (): void {
 it('fails creating testing database when database path is blocked by a file', function (): void {
     createPestPhp($this->tempDir);
     createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/.env.testing', <<<'ENV'
+APP_ENV=testing
+DB_CONNECTION=sqlite
+DB_DATABASE=database/testing.sqlite
+ENV);
     rmdir($this->tempDir.'/database');
     touch($this->tempDir.'/database');
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--setup-testing-database' => true],
+        argvFlags: ['--setup-testing-database', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::FAILURE);
+});
+
+it('does not create database/testing.sqlite when .env.testing uses mysql', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    createBootstrapAppWithEncryptCookies($this->tempDir);
     $this->mockJs->hasPlaywright = true;
 
     $exitCode = runInstall(
@@ -813,7 +836,98 @@ it('fails creating testing database when database path is blocked by a file', fu
         argvFlags: ['--yes', '--no-interaction']
     );
 
-    expect($exitCode)->toBe(InstallCommand::FAILURE);
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and(file_get_contents($this->tempDir.'/.env.testing'))->toContain('DB_CONNECTION=mysql')
+        ->and(file_exists($this->tempDir.'/database/testing.sqlite'))->toBeFalse();
+});
+
+it('creates database/testing.sqlite when .env.testing uses sqlite', function (): void {
+    createPestPhp($this->tempDir);
+    createInstallTestEnv($this->tempDir);
+    file_put_contents($this->tempDir.'/.env.testing', <<<'ENV'
+APP_ENV=testing
+DB_CONNECTION=sqlite
+DB_DATABASE=database/testing.sqlite
+SESSION_DRIVER=array
+CACHE_STORE=array
+QUEUE_CONNECTION=sync
+ENV);
+    $this->mockJs->hasPlaywright = true;
+
+    $exitCode = runInstall(
+        args: ['--setup-testing-database' => true],
+        argvFlags: ['--setup-testing-database', '--no-interaction']
+    );
+
+    expect($exitCode)->toBe(InstallCommand::SUCCESS)
+        ->and(file_exists($this->tempDir.'/database/testing.sqlite'))->toBeTrue();
+});
+
+it('injects RefreshDatabase for Feature tests on fresh install', function (): void {
+    createPestPhp($this->tempDir, "<?php\n\ndeclare(strict_types=1);\n\n");
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
+    expect($pest)->toContain('RefreshDatabase')
+        ->and($pest)->toContain("->in('Feature')")
+        ->and($pest)->toContain('->use(RefreshDatabase::class)');
+});
+
+it('does not duplicate Feature RefreshDatabase when already configured', function (): void {
+    createPestPhp($this->tempDir, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
+    ->in('Feature');
+
+PHP);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
+    expect(substr_count($pest, 'RefreshDatabase::class'))->toBe(1)
+        ->and(substr_count($pest, "->in('Feature')"))->toBe(1);
+});
+
+it('upgrades uses(TestCase::class) Feature suite to include RefreshDatabase', function (): void {
+    createPestPhp($this->tempDir, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Tests\TestCase;
+
+uses(TestCase::class)->in('Feature');
+
+PHP);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
+    expect($pest)->toContain('RefreshDatabase')
+        ->and($pest)->toContain("->in('Feature')");
 });
 
 it('reports phpunit already configured when env vars are already commented', function (): void {

@@ -145,4 +145,22 @@ final class InstallContext
 
         return str_contains($pest, 'E2ETestCase::class');
     }
+
+    /**
+     * Whether Pest.php already applies `RefreshDatabase` to the Feature suite.
+     */
+    public function pestPhpHasFeatureRefreshDatabase(): bool
+    {
+        $pest = $this->getPestPhp();
+
+        if (! is_string($pest)) {
+            return false;
+        }
+
+        if (preg_match('/uses\s*\(\s*(?:.|\n)*?RefreshDatabase(?:.|\n)*?\)\s*->in\([\'"]Feature[\'"]\)/s', $pest) === 1) {
+            return true;
+        }
+
+        return preg_match('/pest\(\)->extend\((?:.|\n)*?RefreshDatabase(?:.|\n)*?->in\([\'"]Feature[\'"]\)/s', $pest) === 1;
+    }
 }
