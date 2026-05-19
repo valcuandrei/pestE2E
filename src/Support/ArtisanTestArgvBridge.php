@@ -35,6 +35,8 @@ final class ArtisanTestArgvBridge
             return;
         }
 
+        self::clearNonPersistedEnvironmentVariables();
+
         $filtered = [];
         $changed = false;
 
@@ -106,5 +108,13 @@ final class ArtisanTestArgvBridge
         putenv("{$key}={$value}");
 
         return true;
+    }
+
+    private static function clearNonPersistedEnvironmentVariables(): void
+    {
+        foreach (AgentParallelMode::nonPersistedEnvironmentVariables() as $key) {
+            unset($_SERVER[$key], $_ENV[$key]);
+            putenv($key);
+        }
     }
 }

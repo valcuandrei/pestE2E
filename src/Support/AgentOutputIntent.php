@@ -55,8 +55,13 @@ final class AgentOutputIntent
             return;
         }
 
+        $nonPersisted = array_flip(AgentParallelMode::nonPersistedEnvironmentVariables());
+
         foreach ($variables as $key => $value) {
             if (! is_string($key)) {
+                continue;
+            }
+            if (isset($nonPersisted[$key])) {
                 continue;
             }
             if (! is_string($value)) {

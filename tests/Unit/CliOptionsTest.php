@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ValcuAndrei\PestE2E\Support\ArtisanTestArgvBridge;
 use ValcuAndrei\PestE2E\Support\CliOptions;
 
 beforeEach(function (): void {
@@ -110,6 +111,15 @@ it('filterArguments removes --run-using=npm', function (): void {
     $filtered = CliOptions::filterArguments($args);
 
     expect($filtered)->toBe(['tests/FooTest.php']);
+});
+
+it('enables browse from PEST_E2E_BROWSE after artisan test argv bridge sets it', function (): void {
+    $argv = ['artisan', 'test', 'tests/Browser', '--browse'];
+
+    ArtisanTestArgvBridge::apply($argv);
+    CliOptions::fromArguments($argv);
+
+    expect(CliOptions::$browse)->toBeTrue();
 });
 
 it('filterArguments keeps test paths and other args', function (): void {

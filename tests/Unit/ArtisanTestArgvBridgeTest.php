@@ -44,6 +44,20 @@ it('ignores pest-e2e flags for non-test artisan commands', function (): void {
         ->and($_SERVER)->not->toHaveKey('PEST_E2E_AGENT_OUTPUT');
 });
 
+it('clears browse env when a later artisan test run omits --browse', function (): void {
+    $browseArgv = ['artisan', 'test', 'tests/Browser', '--browse'];
+    ArtisanTestArgvBridge::apply($browseArgv);
+
+    expect($_SERVER['PEST_E2E_BROWSE'] ?? null)->toBe('1');
+
+    $headlessArgv = ['artisan', 'test', 'tests/Browser'];
+    ArtisanTestArgvBridge::apply($headlessArgv);
+
+    expect($headlessArgv)->toBe(['artisan', 'test', 'tests/Browser'])
+        ->and(array_key_exists('PEST_E2E_BROWSE', $_SERVER))->toBeFalse()
+        ->and(getenv('PEST_E2E_BROWSE'))->toBeFalse();
+});
+
 it('updates $_SERVER argv when no argv argument is passed', function (): void {
     $_SERVER['argv'] = ['artisan', 'test', '--pest-e2e-json'];
 

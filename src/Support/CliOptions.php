@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ValcuAndrei\PestE2E\Support;
 
 use NunoMaduro\Collision\Adapters\Phpunit\Printers\DefaultPrinter;
+use Pest\Plugins\Parallel;
 
 /**
  * @internal
@@ -32,11 +33,14 @@ final class CliOptions
      */
     public static function fromArguments(array $arguments): void
     {
-        self::$debug = in_array('--debug', $arguments, true) || self::truthyEnv('PEST_E2E_DEBUG');
+        self::$debug = in_array('--debug', $arguments, true)
+            || self::truthyEnv('PEST_E2E_DEBUG')
+            || self::parallelGlobalTruthy(AgentParallelMode::DEBUG_GLOBAL_KEY);
         self::$browse = in_array('--browse', $arguments, true)
             || in_array('--headed', $arguments, true)
             || self::$debug
-            || self::truthyEnv('PEST_E2E_BROWSE');
+            || self::truthyEnv('PEST_E2E_BROWSE')
+            || self::parallelGlobalTruthy(AgentParallelMode::BROWSE_GLOBAL_KEY);
         self::$compact = self::hasFlag($arguments, '--compact') || self::compactPrinterEnabled();
         self::$parallel = self::hasFlag($arguments, '--parallel') || ParallelWorkerContext::isParallel();
         self::$agentOutput = self::hasFlag($arguments, '--pest-e2e-agent-output')
@@ -167,6 +171,21 @@ final class CliOptions
     private static function truthyEnv(string $key): bool
     {
         $value = $_SERVER[$key] ?? $_ENV[$key] ?? getenv($key);
+
+        if (! is_string($value) && ! is_int($value) && ! is_bool($value)) {
+            return false;
+        }
+
+        return in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private static function parallelGlobalTruthy(string $key): bool
+    {
+        if (! class_exists(Parallel::class)) {
+            return false;
+        }
+
+        $value = Parallel::getGlobal($key);
 
         if (! is_string($value) && ! is_int($value) && ! is_bool($value)) {
             return false;

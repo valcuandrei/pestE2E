@@ -7,6 +7,7 @@ namespace ValcuAndrei\PestE2E;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\HandlesArguments;
 use Pest\Contracts\Plugins\Terminable;
+use Pest\Plugins\Parallel;
 use Symfony\Component\Console\Output\OutputInterface;
 use ValcuAndrei\PestE2E\Collision\Events;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
@@ -61,6 +62,7 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
     public function handleArguments(array $arguments): array
     {
         CliOptions::fromArguments($arguments);
+        $this->publishParallelExecutionFlags($arguments);
 
         if (CliOptions::agentOutput()) {
             AgentOutput::silenceTestRunnerOutput();
@@ -236,6 +238,38 @@ final class Plugin implements AddsOutput, HandlesArguments, Terminable
 
         foreach ($entries as $entry) {
             fwrite(STDOUT, AgentOutputSummary::encode($entry).PHP_EOL);
+        }
+    }
+
+    /**
+     * @param  array<int, mixed>  $arguments
+     */
+    private function publishParallelExecutionFlags(array $arguments): void
+    {
+        if (! class_exists(Parallel::class)) {
+            return;
+        }
+
+        $parallelRequested = false;
+
+        foreach ($arguments as $argument) {
+            if ($argument === '--parallel' || $argument === '-p') {
+                $parallelRequested = true;
+
+                break;
+            }
+        }
+
+        if (! $parallelRequested && ! ParallelWorkerContext::isParallel() && ! AgentParallelMode::isParatestWorker()) {
+            return;
+        }
+
+        if (CliOptions::$browse) {
+            Parallel::setGlobal(AgentParallelMode::BROWSE_GLOBAL_KEY, '1');
+        }
+
+        if (CliOptions::$debug) {
+            Parallel::setGlobal(AgentParallelMode::DEBUG_GLOBAL_KEY, '1');
         }
     }
 

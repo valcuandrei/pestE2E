@@ -15,6 +15,23 @@ final class AgentParallelMode
 {
     private const GLOBAL_KEY = 'agent_output';
 
+    public const BROWSE_GLOBAL_KEY = 'pest_e2e_browse';
+
+    public const DEBUG_GLOBAL_KEY = 'pest_e2e_debug';
+
+    /**
+     * Environment variables scoped to the current artisan test invocation only.
+     *
+     * @return list<string>
+     */
+    public static function nonPersistedEnvironmentVariables(): array
+    {
+        return [
+            'PEST_E2E_BROWSE',
+            'PEST_E2E_DEBUG',
+        ];
+    }
+
     /**
      * @param  array<int, mixed>  $arguments
      */
@@ -90,8 +107,6 @@ final class AgentParallelMode
             'PAO_FORCE',
             'PAO_DISABLE',
             'PEST_E2E_AGENT_OUTPUT_DISABLE',
-            'PEST_E2E_BROWSE',
-            'PEST_E2E_DEBUG',
             'PEST_E2E_PACKAGE_MANAGER',
         ] as $key) {
             $value = getenv($key);
