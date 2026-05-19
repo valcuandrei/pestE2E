@@ -18,5 +18,5 @@ test('UserProfile can update their profile', async ({ page }) => {
     await page.locator('#email').fill(email);
     await page.getByTestId('update-profile-button').click();
 
-    await expect(page.getByText('Saved.')).toBeVisible();
+    await expect(page.getByText('Profile updated.')).toBeVisible();
 });

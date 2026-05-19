@@ -50,5 +50,5 @@ test('SecurityPassword form updates password', async ({ page }) => {
 
     await page.getByTestId('update-password-button').click()
 
-    await expect(page.getByText('Saved.')).toBeVisible()
+    await expect(page.getByText('Password updated.')).toBeVisible()
 })
