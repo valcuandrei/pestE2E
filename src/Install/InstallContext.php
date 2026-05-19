@@ -157,10 +157,6 @@ final class InstallContext
             return false;
         }
 
-        if (preg_match('/uses\s*\(\s*(?:.|\n)*?RefreshDatabase(?:.|\n)*?\)\s*->in\([\'"]Feature[\'"]\)/s', $pest) === 1) {
-            return true;
-        }
-
-        return preg_match('/pest\(\)->extend\((?:.|\n)*?RefreshDatabase(?:.|\n)*?->in\([\'"]Feature[\'"]\)/s', $pest) === 1;
+        return PestFeatureSuiteInspector::hasActiveRefreshDatabase($pest);
     }
 }

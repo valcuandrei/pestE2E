@@ -930,6 +930,56 @@ PHP);
         ->and($pest)->toContain("->in('Feature')");
 });
 
+it('uncomments RefreshDatabase in the Laravel default uses() Feature block', function (): void {
+    createPestPhp($this->tempDir, <<<'PHP'
+<?php
+
+uses(
+    Tests\TestCase::class,
+    // Illuminate\Foundation\Testing\RefreshDatabase::class,
+)->in('Feature');
+
+PHP);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
+    expect($pest)->toContain('Illuminate\Foundation\Testing\RefreshDatabase::class')
+        ->and($pest)->not->toContain('// Illuminate\Foundation\Testing\RefreshDatabase::class');
+});
+
+it('uncomments a commented ->use(RefreshDatabase::class) line in the Feature pest()->extend chain', function (): void {
+    createPestPhp($this->tempDir, <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+pest()->extend(TestCase::class)
+    // ->use(RefreshDatabase::class)
+    ->in('Feature');
+
+PHP);
+    createInstallTestEnv($this->tempDir);
+    $this->mockJs->hasPlaywright = true;
+
+    runInstall(
+        args: ['--yes' => true],
+        argvFlags: ['--yes', '--no-interaction']
+    );
+
+    $pest = file_get_contents($this->tempDir.'/tests/Pest.php');
+    expect($pest)->toContain('->use(RefreshDatabase::class)')
+        ->and($pest)->not->toContain('// ->use(RefreshDatabase::class)');
+});
+
 it('reports phpunit already configured when env vars are already commented', function (): void {
     createPestPhp($this->tempDir);
     file_put_contents($this->tempDir.'/.env', "APP_KEY=base64:test\n");

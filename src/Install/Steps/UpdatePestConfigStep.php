@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use ValcuAndrei\PestE2E\Install\InstallContext;
 use ValcuAndrei\PestE2E\Install\InstallStep;
+use ValcuAndrei\PestE2E\Install\PestFeatureSuiteInspector;
 use ValcuAndrei\PestE2E\Install\StepResult;
 
 /**
@@ -110,6 +111,11 @@ final class UpdatePestConfigStep extends InstallStep
 
     private function ensureFeatureRefreshDatabase(string $pest): string
     {
+        if (PestFeatureSuiteInspector::hasCommentedRefreshDatabase($pest)) {
+            $pest = PestFeatureSuiteInspector::uncommentRefreshDatabase($pest);
+            $pest = $this->ensureImport($pest, self::REFRESH_DATABASE_FQCN);
+        }
+
         if ($this->featureUsesRefreshDatabase($pest)) {
             return $pest;
         }
@@ -162,11 +168,7 @@ final class UpdatePestConfigStep extends InstallStep
 
     private function featureUsesRefreshDatabase(string $pest): bool
     {
-        if (preg_match('/uses\s*\(\s*(?:.|\n)*?'.self::REFRESH_DATABASE.'(?:.|\n)*?\)\s*->in\([\'"]Feature[\'"]\)/s', $pest) === 1) {
-            return true;
-        }
-
-        return preg_match('/pest\(\)->extend\((?:.|\n)*?'.self::REFRESH_DATABASE.'(?:.|\n)*?->in\([\'"]Feature[\'"]\)/s', $pest) === 1;
+        return PestFeatureSuiteInspector::hasActiveRefreshDatabase($pest);
     }
 
     private function ensureImport(string $pest, string $fqcn): string
