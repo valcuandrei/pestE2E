@@ -1,267 +1,35 @@
-# pestE2E
+![pestE2E](./art/logo.png)
 
-**Laravel-first E2E orchestration for JavaScript-native browser testing.**
+**Write Pest tests. Run real browser E2E tests. Keep everything inside your Laravel test suite.**
 
-Run your existing JS E2E suite (Playwright by default) from Pest — without introducing a PHP browser DSL.
+![pestE2E hero](./art/hero.png)
 
----
+pestE2E is a Laravel-first bridge between Pest and JavaScript-native browser testing.
 
-## What This Is
+Laravel owns your test intent, state, authentication, fixtures, and assertions. JavaScript owns the browser. pestE2E connects the two and maps structured browser results back into normal Pest output.
 
-**pestE2E** is a Laravel-native orchestration layer that runs JavaScript-owned browser tests and maps structured results back into Pest output.
-
-Conceptually, this is an Inertia-style bridge for E2E testing:
-
-* Laravel owns test intent, state, authentication, and data
-* JavaScript owns browser execution
-* A stable contract connects the two
-
-Pest orchestrates JS execution, passes context (environment, params, auth), and consumes structured JSON reports.
-
-This package does **not** wrap Playwright in PHP.
-It orchestrates your existing JS test suite from Laravel.
+No PHP browser DSL.
+No Playwright wrapper.
+No separate frontend-only testing workflow.
 
 ---
 
-## Key Features
+## How It Works
 
-* JS test filtering via `only()` and `runTest()`
-* Laravel authentication using one-time auth tickets
-* Runner agnostic (Playwright by default, extensible via worker contracts)
-* Managed testing server (no manual `php artisan serve`)
-* Isolated testing environment
-* Stable JSON reporting contract (`pest-e2e.v1`)
-* Fully type-safe (PHPStan compliant)
-
----
-
-## What This Is NOT
-
-* Not a browser abstraction
-* Not a PHP wrapper around Playwright
-* Not Dusk
-* Not Selenium
-* No `visit()`, `click()`, or `type()` in PHP — ever
-
-All browser logic lives in JavaScript.
-
----
-
-## Status
-
-**Stable v1**
-
-The public PHP API, authentication contract, and JSON report schema are locked.
-Internal runner adapters may evolve.
-
-### Parallel test execution
-
-Browser tests that call `e2e()->…->run()` can run with Pest / Laravel parallel testing:
-
-```bash
-php artisan test --parallel --processes=4
-```
-
-#### Required `.env.testing` setup
-
-Use a real test database (MySQL or PostgreSQL), not SQLite in-memory. Laravel parallel testing creates one database per worker (`testing_test_1`, `testing_test_2`, …). Recommended overrides:
-
-```dotenv
-SESSION_DRIVER=array
-CACHE_STORE=array
-QUEUE_CONNECTION=sync
-DB_DATABASE=testing
-```
-
-Run with `--recreate-databases` when bootstrapping worker databases for the first time.
-
-#### Per-worker isolation
-
-Each Pest worker process gets:
-
-* its own **managed Laravel server** on a dedicated port
-* **`APP_URL` / `baseUrl`** passed to Playwright matching that port
-* **worker-scoped auth ticket cache keys** (no cross-worker ticket bleed)
-* the same **`DB_*` / `CACHE_PREFIX` env** as the PHP test worker (including `testing_test_{TEST_TOKEN}`)
-
-Default port formula when `server.parallel_port_offset` is enabled:
+1. Write a Pest test in PHP.
+2. Pass authentication, parameters, and context to your JavaScript test runner.
+3. Run real browser tests with Playwright.
+4. Report structured results back into Pest.
 
 ```text
-server.port + TEST_TOKEN
-```
-
-Example with base port `8800`: worker `1` → `8801`, worker `4` → `8804`. Serial (non-parallel) runs keep using an ephemeral free port.
-
-Configure the base port in `config/pest-e2e.php` under `server.port` (or legacy `parallel.base_port`) or via `PEST_E2E_SERVER_PORT` / `PEST_E2E_PARALLEL_BASE_PORT` in `.env.testing`. Set `server.host` / `PEST_E2E_SERVER_HOST` when the app must bind to a specific interface.
-
----
-
-# Installation
-
-Install the package:
-
-```bash
-composer require valcuandrei/pest-e2e --dev
-```
-
-Then run:
-
-```bash
-php artisan pest-e2e:install
-```
-
-The installer can:
-
-* Update your `pest.php` to include `E2ETestCase`
-* Publish `config/pest-e2e.php`
-* Publish the base E2E test case
-* Publish the JS harness
-* Publish the Playwright integration
-* Install `@playwright/test` and download Playwright **browser binaries** (`playwright install`)
-* Create or update `.env.testing` with parallel-safe E2E overrides
-* Create `database/testing.sqlite` for projects that intentionally use SQLite
-* Configure `phpunit.xml` to let `.env.testing` control DB/cache (comment out overrides)
-* Ensure `phpunit.xml` defines a **Browser** testsuite for `tests/Browser` (when `phpunit.xml` exists; idempotent on every successful install)
-* When **Laravel Sail** is present (`laravel/sail` in `composer.json` or `vendor/laravel/sail`, plus a `laravel.test` service), offer to merge the **Headed Mode in Sail** block into your Docker Compose file — the file is chosen in the same order Docker Compose does: `compose.yaml`, `compose.yml`, `docker-compose.yaml`, then `docker-compose.yml`
-
-Each step is skipped if already done. Use explicit flags to force: `--setup-env-testing`, `--update-testing-env`, `--setup-testing-database`, `--configure-phpunit`.
-
-When publishing `E2ETestCase`, the installer sets the default JS package manager from tools **found on your PATH** (`pnpm`, `yarn`, `bun`, `npm`). The same resolved manager is used for the **Playwright dev dependency install** (so it no longer follows auto-detection / `PEST_E2E_PACKAGE_MANAGER` during that step). Pass **`--package-manager=pnpm`** (etc.) to force the stub value and skip detection. If more than one is available, you are prompted to pick one in interactive installs; with `--no-interaction` / `--yes`, it prefers a manager that matches an existing **lockfile**, otherwise the first in priority order (pnpm → yarn → bun → npm). If none are on PATH, it falls back to lockfile-only detection (same order), then `npm`.
-
-### Unattended / CI mode
-
-```bash
-php artisan pest-e2e:install --yes
-```
-
-Alias:
-
-```bash
-php artisan pest-e2e:install --unattended
-```
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `--yes` | Answer yes to all questions (performs full setup: update-pest, publish-config, publish-base-test-case, publish-js-harness, publish-js-playwright, add-csrf-exclusion, setup-env-testing/update-testing-env, setup-testing-database, configure-phpunit, sail-wslg-headed when Sail is detected, install-playwright) |
-| `--no` | Answer no to all questions |
-| `--force` | Overwrite existing files when publishing |
-| `--update-pest` | Update Pest config to include E2ETestCase |
-| `--setup-env-testing` | Create `.env.testing` with parallel-safe E2E overrides |
-| `--update-testing-env` | Patch an existing `.env.testing` with parallel-safe session/cache/queue settings |
-| `--setup-testing-database` | Create `database/testing.sqlite` for projects that intentionally use SQLite |
-| `--configure-phpunit` | Comment out DB/cache env in `phpunit.xml` so `.env.testing` controls them |
-| `--sail-wslg-headed` | Merge WSLg display/volume settings into the Sail `laravel.test` service of the resolved Compose file (see **Headed Mode in Sail** below) |
-| `--add-csrf-exclusion` | Add pest-e2e auth route to CSRF exclusion (required for Herd/Windows) |
-| `--publish-config` | Publish config |
-| `--publish-base-test-case` | Publish E2ETestCase |
-| `--publish-js-harness` | Publish JS harness |
-| `--publish-js-playwright` | Publish Playwright adapter |
-| `--publish-browser-tests` | Publish browser tests |
-| `--publish-playwright-tests` | Publish Playwright tests |
-| `--install-playwright` | Install `@playwright/test` and run `playwright install` (browser binaries) |
-| `--package-manager=` | Force the value embedded in `E2ETestCase` and used for Playwright install (`npm`, `yarn`, `pnpm`, `bun`); skips PATH / lockfile detection and interactive choice |
-
----
-
-# Testing Environment (Important)
-
-pestE2E starts a managed Laravel server using:
-
-```
---env=testing
-```
-
-If a `.env.testing` file exists, Laravel automatically loads it.
-
-**The installer can create this for you** with `--setup-env-testing` (included in `--yes`). It prefers Sail-compatible MySQL defaults because Laravel parallel testing creates per-worker databases from the base database name:
-
-```dotenv
-APP_ENV=testing
-APP_URL=http://127.0.0.1
-
-DB_CONNECTION=mysql
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=testing
-DB_USERNAME=sail
-DB_PASSWORD=password
-
-SESSION_DRIVER=array
-CACHE_STORE=array
-QUEUE_CONNECTION=sync
-
-PEST_E2E_AUTH_ROUTE_ENABLED=true
-```
-
-For existing `.env.testing` files, use `--update-testing-env` or `--yes`. The installer preserves existing MySQL/PostgreSQL database credentials, updates `SESSION_DRIVER=array`, `CACHE_STORE=array`, and `QUEUE_CONNECTION=sync`, and warns before replacing SQLite with Sail MySQL defaults unless `--yes`, `--unattended`, or `--force` already implies consent.
-
-**Manual setup:** If you prefer to configure yourself, create `.env.testing` with a real isolated test database:
-
-```dotenv
-APP_ENV=testing
-APP_DEBUG=true
-
-DB_CONNECTION=mysql
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=testing
-DB_USERNAME=sail
-DB_PASSWORD=password
-
-SESSION_DRIVER=array
-CACHE_STORE=array
-QUEUE_CONNECTION=sync
-
-PEST_E2E_AUTH_ROUTE_ENABLED=true
-```
-
-This ensures:
-
-* Your development database is not modified
-* Auth routes are enabled only during testing
-* The Pest process and the managed server use the same database
-* Feature tests and browser tests do not share database-backed session/cache/queue state across workers
-
-For `php artisan test --parallel`, Laravel creates per-worker databases such as `testing_test_1`, `testing_test_2`, etc. SQLite is not recommended for parallel browser testing because it does not provide the same per-worker database isolation model.
-
-Your `phpunit.xml` must not override `DB_CONNECTION`, `DB_DATABASE`, `CACHE_STORE`, or `SESSION_DRIVER` — let `.env.testing` control them. The installer can comment these out for you with `--configure-phpunit`.
-
-The managed server is started in isolation and inherits no development state beyond explicitly provided environment variables.
-
----
-
-# Quick Start
-
-Configure a target inside the setUp() method of tests/E2ETestCase.php:
-
-```php
-e2e()->target('frontend', fn ($p) => $p
-    ->dir('resources/js/e2e')
-    ->env(['APP_URL' => 'http://localhost'])
-    ->params(['baseUrl' => 'http://localhost'])
-);
-```
->Register targets in your base E2E test case (`E2ETestCase::setUp()`), not inside individual test functions. For `--parallel`, ensure per-worker databases (see [Parallel test execution](#parallel-test-execution) under [Status](#status)).
-
-Run all tests:
-
-```php
-e2e('frontend')->run();
-```
-
-Run a specific test:
-
-```php
-e2e('frontend')->runTest('UserProfile can update their profile');
+Pest test → Playwright/browser → JSON report → Pest output
 ```
 
 ---
 
-# Example: Complex Frontend Flow
+## Example
 
-## PHP (Pest)
+### Pest
 
 ```php
 use App\Models\User;
@@ -270,7 +38,7 @@ test('that a user can update their profile', function () {
     $user = User::factory()->create();
 
     e2e('frontend')
-        ->actingAs($user)  // or ->loginAs($user)
+        ->actingAs($user)
         ->withParams([
             'name' => 'Test User',
             'email' => 'test@example.com',
@@ -282,7 +50,7 @@ test('that a user can update their profile', function () {
 });
 ```
 
-## JavaScript (Playwright)
+### Playwright
 
 ```ts
 import { test, expect } from '@playwright/test';
@@ -305,31 +73,308 @@ JavaScript controls the browser.
 
 ---
 
-# Why Not Use Pest’s Native Browser Testing?
+## Why pestE2E Exists
 
-Pest’s built-in browser testing (Dusk-style) is excellent for:
+Pest is excellent for Laravel tests. Playwright is excellent for browser tests.
 
-* Form submissions
-* CRUD flows
-* Traditional backend-driven pages
-* Simple UI assertions
+pestE2E lets you use both without pretending one is the other.
 
-However, for advanced frontend systems such as:
+It is designed for applications where the browser matters:
 
-* Drag-and-drop page builders
-* Resizable layout systems
-* CSS box-model assertions (width, height, margin, padding)
-* Transform-based positioning
-* Vue / Pinia state inspection
-* DOM measurement and layout calculations
+- Vue, React, Inertia, Livewire, or SPA interfaces
+- Drag-and-drop builders
+- Layout editors
+- Resizable UI systems
+- CSS box-model assertions
+- Transform-based positioning
+- DOM measurement and layout calculations
+- Frontend state inspection
 
-You need full native Playwright running in its own JavaScript environment.
-
-pestE2E orchestrates your JS suite — it does not abstract it.
+pestE2E does not hide Playwright behind PHP methods. It lets Laravel orchestrate your browser suite while JavaScript keeps full ownership of browser automation.
 
 ---
 
-# Managed Testing Server
+## Key Features
+
+- Pest-native orchestration for JavaScript E2E tests
+- Playwright by default
+- Runner agnostic through worker contracts
+- Laravel authentication using one-time auth tickets
+- Managed Laravel testing server
+- Isolated testing environment
+- Parallel-safe worker ports and auth ticket keys
+- JS test filtering via `only()` and `runTest()`
+- Structured JSON reporting contract: `pest-e2e.v1`
+- Agent / PAO JSON output for AI agents and CI parsers
+- Headed and debug mode support
+- Laravel Sail WSLg headed mode support
+- PHPStan-compliant internals
+
+---
+
+## What This Is Not
+
+pestE2E is not:
+
+- a browser abstraction
+- a PHP wrapper around Playwright
+- Dusk
+- Selenium
+- a PHP API for `visit()`, `click()`, or `type()`
+
+All browser logic stays in JavaScript.
+
+---
+
+## Status
+
+**Stable v1**
+
+The public PHP API, authentication contract, and JSON report schema are locked. Internal runner adapters may evolve.
+
+---
+
+## Installation
+
+Install the package:
+
+```bash
+composer require valcuandrei/pest-e2e --dev
+```
+
+Then run the installer:
+
+```bash
+php artisan pest-e2e:install
+```
+
+For unattended setup:
+
+```bash
+php artisan pest-e2e:install --yes
+```
+
+Alias:
+
+```bash
+php artisan pest-e2e:install --unattended
+```
+
+The installer can:
+
+- update your `pest.php` to include `E2ETestCase`
+- publish `config/pest-e2e.php`
+- publish the base E2E test case
+- publish the JS harness
+- publish the Playwright integration
+- install `@playwright/test`
+- download Playwright browser binaries with `playwright install`
+- create or update `.env.testing` with parallel-safe E2E overrides
+- create `database/testing.sqlite` for projects that intentionally use SQLite
+- configure `phpunit.xml` so `.env.testing` controls DB/cache values
+- ensure `phpunit.xml` defines a `Browser` testsuite for `tests/Browser`
+- merge the WSLg headed-mode block into Laravel Sail when Sail is detected
+
+Each step is skipped if already done.
+
+---
+
+## Installer Options
+
+| Option | Description |
+| --- | --- |
+| `--yes` | Answer yes to all questions and perform full setup |
+| `--unattended` | Alias for `--yes` |
+| `--no` | Answer no to all questions |
+| `--force` | Overwrite existing files when publishing |
+| `--update-pest` | Update Pest config to include `E2ETestCase` |
+| `--setup-env-testing` | Create `.env.testing` with parallel-safe E2E overrides |
+| `--update-testing-env` | Patch an existing `.env.testing` with parallel-safe session/cache/queue settings |
+| `--setup-testing-database` | Create `database/testing.sqlite` for projects that intentionally use SQLite |
+| `--configure-phpunit` | Comment out DB/cache env values in `phpunit.xml` so `.env.testing` controls them |
+| `--sail-wslg-headed` | Merge WSLg display/volume settings into the Sail `laravel.test` service |
+| `--add-csrf-exclusion` | Add the pestE2E auth route to CSRF exclusions |
+| `--publish-config` | Publish config |
+| `--publish-base-test-case` | Publish `E2ETestCase` |
+| `--publish-js-harness` | Publish JS harness |
+| `--publish-js-playwright` | Publish Playwright adapter |
+| `--publish-browser-tests` | Publish browser tests |
+| `--publish-playwright-tests` | Publish Playwright tests |
+| `--install-playwright` | Install `@playwright/test` and run `playwright install` |
+| `--package-manager=` | Force the package manager used for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` |
+
+When publishing `E2ETestCase`, the installer resolves the package manager from tools found on your PATH in this priority order:
+
+```text
+pnpm → yarn → bun → npm
+```
+
+If multiple tools are available, interactive installs prompt you to choose. With `--yes` / `--unattended`, the installer prefers a manager matching an existing lockfile, then falls back to the priority order. If none are found on PATH, it uses lockfile-only detection, then falls back to `npm`.
+
+Pass `--package-manager=pnpm`, `--package-manager=yarn`, `--package-manager=bun`, or `--package-manager=npm` to force the value.
+
+---
+
+## Testing Environment
+
+pestE2E starts a managed Laravel server using:
+
+```bash
+--env=testing
+```
+
+If `.env.testing` exists, Laravel loads it automatically.
+
+The installer can create this file with `--setup-env-testing` or update an existing one with `--update-testing-env`.
+
+Recommended `.env.testing` values for Sail-compatible MySQL:
+
+```dotenv
+APP_ENV=testing
+APP_URL=http://127.0.0.1
+
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=testing
+DB_USERNAME=sail
+DB_PASSWORD=password
+
+SESSION_DRIVER=array
+CACHE_STORE=array
+QUEUE_CONNECTION=sync
+
+PEST_E2E_AUTH_ROUTE_ENABLED=true
+```
+
+These values ensure:
+
+- your development database is not modified
+- auth routes are enabled only during testing
+- the Pest process and managed server use the same database
+- feature tests and browser tests do not share database-backed session/cache/queue state across workers
+
+Your `phpunit.xml` should not override `DB_CONNECTION`, `DB_DATABASE`, `CACHE_STORE`, or `SESSION_DRIVER`. Let `.env.testing` control them.
+
+The installer can comment those overrides out for you with:
+
+```bash
+php artisan pest-e2e:install --configure-phpunit
+```
+
+---
+
+## Parallel Testing
+
+Browser tests that call `e2e()->...->run()` can run with Pest / Laravel parallel testing:
+
+```bash
+php artisan test --parallel --processes=4
+```
+
+For first-time database bootstrapping, run:
+
+```bash
+php artisan test --parallel --recreate-databases
+```
+
+Use a real test database such as MySQL or PostgreSQL. Laravel parallel testing creates one database per worker:
+
+```text
+testing_test_1
+testing_test_2
+testing_test_3
+testing_test_4
+```
+
+SQLite is not recommended for parallel browser testing because it does not provide the same per-worker database isolation model.
+
+Each Pest worker gets:
+
+- its own managed Laravel server
+- a dedicated HTTP port
+- `APP_URL` / `baseUrl` matching that port
+- worker-scoped auth ticket cache keys
+- the same `DB_*` / `CACHE_PREFIX` env as the PHP worker
+
+Default port formula when `server.parallel_port_offset` is enabled:
+
+```text
+server.port + TEST_TOKEN
+```
+
+Example with base port `8800`:
+
+```text
+worker 1 → 8801
+worker 4 → 8804
+```
+
+Serial runs keep using an ephemeral free port.
+
+Configure the base port with:
+
+```dotenv
+PEST_E2E_SERVER_PORT=8800
+```
+
+Legacy env is also supported:
+
+```dotenv
+PEST_E2E_PARALLEL_BASE_PORT=8800
+```
+
+You can also configure this in `config/pest-e2e.php` under `server.port`.
+
+---
+
+## Quick Start
+
+Configure a target in `tests/E2ETestCase.php` inside `setUp()`:
+
+```php
+e2e()->target('frontend', fn ($p) => $p
+    ->dir('resources/js/e2e')
+    ->env(['APP_URL' => 'http://localhost'])
+    ->params(['baseUrl' => 'http://localhost'])
+);
+```
+
+Register targets in your base E2E test case, not inside individual test functions.
+
+Run all tests for a target:
+
+```php
+e2e('frontend')->run();
+```
+
+Run a specific JS test:
+
+```php
+e2e('frontend')->runTest('UserProfile can update their profile');
+```
+
+Pass parameters:
+
+```php
+e2e('frontend')
+    ->withParams(['name' => 'Test User'])
+    ->runTest('UserProfile can update their profile');
+```
+
+Authenticate as a Laravel user:
+
+```php
+e2e('frontend')
+    ->actingAs($user)
+    ->runTest('Dashboard loads');
+```
+
+`actingAs()` and `loginAs()` are both supported.
+
+---
+
+## Managed Testing Server
 
 When you call:
 
@@ -339,19 +384,19 @@ e2e('frontend')->run();
 
 pestE2E automatically:
 
-1. Boots a temporary Laravel HTTP server
-2. Forces it into `APP_ENV=testing`
-3. Binds it to `127.0.0.1` on a free port
-4. Executes your JS runner against that server
-5. Collects the JSON report
-6. Shuts the server down
+1. boots a temporary Laravel HTTP server
+2. forces it into `APP_ENV=testing`
+3. binds it to `127.0.0.1`
+4. chooses a free port for serial runs, or a worker-specific port for parallel runs
+5. executes your JS runner against that server
+6. collects the JSON report
+7. shuts the server down
 
 No manual `php artisan serve` required.
-No environment leakage into development.
 
 ---
 
-# Running Tests
+## Running Tests
 
 Local:
 
@@ -359,39 +404,80 @@ Local:
 php artisan test
 ```
 
-Sail:
+Laravel Sail:
 
 ```bash
 sail artisan test
 ```
 
-**E2E / Browser tests:** parallel runs are supported when each worker has an isolated database (see [Parallel test execution](#parallel-test-execution) under [Status](#status)).
+Parallel:
 
 ```bash
 php artisan test --parallel --processes=4
 ```
 
-Successful E2E detail output is shown in normal test runs. In `--compact` and `--parallel` runs, passed E2E details are suppressed so Pest output stays readable; failed E2E runs still print their details.
+Successful E2E detail output is shown in normal test runs.
 
-## Agent / PAO output
+In `--compact` and `--parallel` runs, passed E2E details are suppressed so Pest output stays readable. Failed E2E runs still print their details.
 
-For AI agents and CI parsers, enable compact JSON (one line per `e2e()->run()`):
+---
+
+## Agent / PAO Output
+
+For AI agents and CI parsers, enable compact JSON output. This emits one line per `e2e()->run()`:
 
 ```bash
 PEST_E2E_AGENT_OUTPUT=1 php artisan test ./tests/Browser
+```
+
+You can also enable it with the CLI flag:
+
+```bash
 php artisan test ./tests/Browser --pest-e2e-agent-output
 php artisan test ./tests/Browser --parallel --pest-e2e-agent-output
 ```
 
-Also auto-detected when `laravel/agent-detector` is installed or common agent env vars are set (e.g. `CURSOR_AGENT`). Configure via `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` in `.env.testing`, or `agent_output` in `config/pest-e2e.php`.
+Agent output is also auto-detected when `laravel/agent-detector` is installed or common agent env vars are set, such as:
 
-Disable with `PEST_E2E_AGENT_OUTPUT_DISABLE=1` or `PAO_DISABLE=1`.
+```text
+CURSOR_AGENT
+```
 
-In agent mode, human-readable Pest output is suppressed. Failed runs include `php_test`, `failures` (JS name, file, message, stack), and `report_dir`. See `.docs/API.md` for the full JSON contract.
+Configure it with:
+
+```dotenv
+PEST_E2E_AGENT_OUTPUT=1
+PAO_FORCE=1
+```
+
+Or in `config/pest-e2e.php`:
+
+```php
+'agent_output' => true,
+```
+
+Disable it with:
+
+```dotenv
+PEST_E2E_AGENT_OUTPUT_DISABLE=1
+PAO_DISABLE=1
+```
+
+In agent mode, human-readable Pest output is suppressed. Failed runs include:
+
+- `php_test`
+- `failures`
+- JS test name
+- JS file
+- message
+- stack
+- `report_dir`
+
+See `.docs/API.md` for the full JSON contract.
 
 ---
 
-# Debug & Headed Mode
+## Debug & Headed Mode
 
 ```bash
 php artisan test --browse
@@ -399,9 +485,13 @@ php artisan test --debug
 php artisan test --run-using=yarn
 ```
 
-* `--browse` / `--headed` → runs browser in headed mode
-* `--debug` → enables debug mode and implies headed mode
-* `--run-using=npm|yarn|pnpm|bun` → use a specific package manager for E2E runs (default is set in `E2ETestCase::$e2ePackageManager` during install)
+- `--browse` / `--headed` runs the browser in headed mode
+- `--debug` enables debug mode and implies headed mode
+- `--run-using=npm|yarn|pnpm|bun` uses a specific package manager for E2E runs
+
+The default package manager is set in `E2ETestCase::$e2ePackageManager` during install.
+
+---
 
 ## Timing Instrumentation
 
@@ -411,17 +501,23 @@ Enable baseline timing markers:
 PEST_E2E_TIMING=true
 ```
 
-Markers are emitted to `stderr` with prefix:
+Markers are emitted to `stderr` with this prefix:
 
 ```text
 [pest-e2e:timing]
 ```
 
-Each marker is JSON payload with `phase`, `atMs`, and optional `durationMs`.
+Each marker is a JSON payload with:
 
-## Headed Mode in Sail (WSL2 + WSLg)
+- `phase`
+- `atMs`
+- optional `durationMs`
 
-If you run Pest inside Sail on Windows (WSL2) and want headed mode, forward WSLg into the container by adding this to your `laravel.test` service:
+---
+
+## Headed Mode in Sail
+
+If you run Pest inside Laravel Sail on Windows WSL2 and want headed browser mode, forward WSLg into the container by adding this to your `laravel.test` service:
 
 ```yaml
 environment:
@@ -435,20 +531,19 @@ volumes:
   - /tmp/.X11-unix:/tmp/.X11-unix
 ```
 
-This is only required for headed browser mode inside Docker on WSL2.
-Headless mode works without additional configuration.
+This is only required for headed browser mode inside Docker on WSL2. Headless mode works without additional configuration.
 
 ---
 
-# Authentication Contract
+## Authentication Contract
 
 Default auth route:
 
-```
+```text
 /pest-e2e/auth/login
 ```
 
-Configurable via:
+Configure it with:
 
 ```php
 config('pest-e2e.auth.route');
@@ -456,15 +551,17 @@ config('pest-e2e.auth.route');
 
 Security:
 
-* Disabled by default
-* Requires header (default: `X-Pest-E2E: 1`)
-* Tickets are single-use and short-lived
+- disabled by default
+- only enabled when `PEST_E2E_AUTH_ROUTE_ENABLED=true`
+- requires a header, default: `X-Pest-E2E: 1`
+- tickets are single-use
+- tickets are short-lived
 
 ---
 
-# Reports
+## Reports & Artifacts
 
-The package does **not** store JSON reports on disk. Playwright emits its JSON report to stdout; the PHP side parses it in memory and maps it to the canonical `pest-e2e.v1` schema.
+Playwright emits its JSON report to stdout. The PHP side parses it in memory and maps it to the canonical `pest-e2e.v1` schema.
 
 Playwright artifacts are written to a run-scoped directory:
 
@@ -472,44 +569,70 @@ Playwright artifacts are written to a run-scoped directory:
 {reports.base_dir}/{target}/{runId}
 ```
 
-Configure the base directory globally with `config('pest-e2e.reports.base_dir')`. The default is `storage/framework/testing/pest-e2e`.
+The default base directory is:
+
+```text
+storage/framework/testing/pest-e2e
+```
+
+Configure it with:
+
+```php
+config('pest-e2e.reports.base_dir');
+```
 
 Old run directories are pruned according to `reports.prune`. Only directories marked as pestE2E runs are deleted, and the current run directory is never pruned.
 
 ---
 
-# Configuration
+## Configuration
 
 Key config keys in `config/pest-e2e.php`:
 
 | Key | Description |
-|-----|-------------|
-| `auth.route` | Auth endpoint path (default: `/pest-e2e/auth/login`) |
-| `auth.route_enabled` | Enable auth route (default: `false`, set via `PEST_E2E_AUTH_ROUTE_ENABLED`) |
-| `auth.ttl_seconds` | Auth ticket TTL (default: 60) |
-| `auth.header.name` / `auth.header.value` | Header required for auth requests (default: `X-Pest-E2E: 1`) |
-| `server.driver` | Server runner: `artisan` or `php_builtin` (default: `php_builtin`) |
-| `server.host` | Bind address for the managed server (default: `127.0.0.1`) |
-| `server.port` | Base HTTP port for parallel workers (default: `8800`) |
-| `server.parallel_port_offset` | When true, parallel workers use `server.port + TEST_TOKEN` (default: `true`) |
-| `reports.base_dir` | Base directory for Playwright artifacts (default: `storage/framework/testing/pest-e2e`) |
-| `reports.prune.enabled` | Enable old run pruning (default: `true`) |
-| `reports.prune.keep_runs` | Number of most recent marked runs to keep (default: 50) |
-| `reports.prune.keep_days` | Age window for marked runs to keep (default: 7) |
-| `timing.enabled` | Enable timing instrumentation (default: `false`, set via `PEST_E2E_TIMING`) |
-| `js_runner.driver` | JS runner (default: `playwright`) |
-| `js_runner.mode` | Runner mode: `cold` or `warm` (default: `cold`) |
-| `package_manager` | Package manager for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` (default: set in E2ETestCase during install, overridable via `--run-using`) |
+| --- | --- |
+| `auth.route` | Auth endpoint path. Default: `/pest-e2e/auth/login` |
+| `auth.route_enabled` | Enable auth route. Default: `false`, set via `PEST_E2E_AUTH_ROUTE_ENABLED` |
+| `auth.ttl_seconds` | Auth ticket TTL. Default: `60` |
+| `auth.header.name` / `auth.header.value` | Header required for auth requests. Default: `X-Pest-E2E: 1` |
+| `server.driver` | Server runner: `artisan` or `php_builtin`. Default: `php_builtin` |
+| `server.host` | Bind address for the managed server. Default: `127.0.0.1` |
+| `server.port` | Base HTTP port for parallel workers. Default: `8800` |
+| `server.parallel_port_offset` | Parallel workers use `server.port + TEST_TOKEN`. Default: `true` |
+| `reports.base_dir` | Base directory for Playwright artifacts. Default: `storage/framework/testing/pest-e2e` |
+| `reports.prune.enabled` | Enable old run pruning. Default: `true` |
+| `reports.prune.keep_runs` | Number of most recent marked runs to keep. Default: `50` |
+| `reports.prune.keep_days` | Age window for marked runs to keep. Default: `7` |
+| `timing.enabled` | Enable timing instrumentation. Default: `false`, set via `PEST_E2E_TIMING` |
+| `js_runner.driver` | JS runner. Default: `playwright` |
+| `js_runner.mode` | Runner mode: `cold` or `warm`. Default: `cold` |
+| `package_manager` | Package manager for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` |
 | `parallel.base_port` | Deprecated alias for `server.port` |
-| `agent_output` | Force agent JSON output (default: from `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` env) |
-| `bindings` | Contract-to-implementation map for swapping the JS runner. Keys: `JsWorkerContract::class`, `JsonParserContract::class`. Default: Playwright. Override to use Cypress, Puppeteer, etc. |
+| `agent_output` | Force agent JSON output. Default: from `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` |
+| `bindings` | Contract-to-implementation map for swapping the JS runner |
 
 ---
 
-# Final Positioning
+## Runner Swapping
 
-pestE2E is not browser testing for Laravel.
+pestE2E uses contracts for the JavaScript worker and JSON parser.
 
-It is a **contract-driven bridge** between Laravel and JS-native E2E systems.
+The default bindings use Playwright, but you can override them in `config/pest-e2e.php` to integrate another runner, such as Cypress or Puppeteer.
 
-If you are building advanced frontend applications — page builders, editors, complex layouts — and you want Laravel to orchestrate while JavaScript owns the browser, this package is for you.
+The important boundary stays the same:
+
+```text
+Laravel/Pest owns orchestration.
+JavaScript owns browser execution.
+JSON owns the report contract.
+```
+
+---
+
+## Final Positioning
+
+pestE2E is not “browser testing for Laravel.”
+
+It is a contract-driven bridge between Laravel and JavaScript-native E2E systems.
+
+If you are building advanced frontend applications and want Laravel to orchestrate while JavaScript owns the browser, this package is for you.
