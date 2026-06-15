@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Support;
 
-use Laravel\AgentDetector\AgentDetector;
 use Pest\Plugins\Parallel;
 
 /**
@@ -47,7 +46,7 @@ final class AgentOutput
             return true;
         }
 
-        if (class_exists(AgentDetector::class)) {
+        if (class_exists('Laravel\\AgentDetector\\AgentDetector')) {
             return self::detectUsingAgentDetector();
         }
 
@@ -56,9 +55,21 @@ final class AgentOutput
 
     private static function detectUsingAgentDetector(): bool
     {
-        $detection = AgentDetector::detect();
+        $agentDetector = 'Laravel\\AgentDetector\\AgentDetector';
 
-        return $detection->isAgent;
+        if (! is_callable([$agentDetector, 'detect'])) {
+            return false;
+        }
+
+        /** @var callable(): mixed $detect */
+        $detect = [$agentDetector, 'detect'];
+        $detection = $detect();
+
+        if (! is_object($detection) || ! property_exists($detection, 'isAgent')) {
+            return false;
+        }
+
+        return self::isTruthy($detection->isAgent);
     }
 
     /**
