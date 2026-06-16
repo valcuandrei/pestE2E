@@ -57,7 +57,7 @@ final class AgentOutput
     {
         $agentDetector = 'Laravel\\AgentDetector\\AgentDetector';
 
-        if (! is_callable([$agentDetector, 'detect'])) {
+        if (! in_array('detect', get_class_methods($agentDetector), true)) {
             return false;
         }
 

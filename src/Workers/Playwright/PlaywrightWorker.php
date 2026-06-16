@@ -11,6 +11,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessResultDTO;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
+use ValcuAndrei\PestE2E\Support\ProcessEnvironment;
 
 final class PlaywrightWorker implements JsWorkerContract
 {
@@ -36,7 +37,7 @@ final class PlaywrightWorker implements JsWorkerContract
             $process = new Process(
                 command: [$localPath, ...$args],
                 cwd: $workingDir,
-                env: $env,
+                env: ProcessEnvironment::normalize($env),
             );
             if ($plan->options->timeoutSeconds !== null) {
                 $process->setTimeout($plan->options->timeoutSeconds);

@@ -8,6 +8,7 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 use ValcuAndrei\PestE2E\Enums\ServerRunnerType;
 use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
+use ValcuAndrei\PestE2E\Support\ProcessEnvironment;
 
 /**
  * @internal
@@ -120,7 +121,7 @@ final class ServerRunner
         $this->process = new Process(
             $this->command(),
             $basePath,
-            $env,
+            ProcessEnvironment::normalize($env),
             null,
             null
         );

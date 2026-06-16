@@ -416,7 +416,7 @@ class JsPackageManager
         $prefix = $dlx && isset($pm['dlx']) ? $pm['dlx'] : [($pm['name'] ?? '')];
         $prefix = $this->ensureStringArray($prefix);
         $cwd = $workDir ?? base_path();
-        $process = new Process([...$prefix, ...$command], $cwd, $env);
+        $process = new Process([...$prefix, ...$command], $cwd, ProcessEnvironment::normalize($env));
         $process->setTty($tty);
         $process->setTimeout($timeout);
 
