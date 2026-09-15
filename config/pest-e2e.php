@@ -26,6 +26,10 @@ return [
         'port' => (int) env('PEST_E2E_SERVER_PORT', env('PEST_E2E_PARALLEL_BASE_PORT', 8800)),
         // When true, parallel workers bind to server.port + TEST_TOKEN (e.g. 8801, 8802).
         'parallel_port_offset' => filter_var(env('PEST_E2E_SERVER_PARALLEL_PORT_OFFSET', true), FILTER_VALIDATE_BOOL),
+        // Ceiling for how long ServerRunner waits for the managed PHP server to
+        // accept its first TCP connection. Only bounds startup — a healthy boot
+        // returns immediately, so raising this adds no per-test overhead.
+        'ready_timeout_seconds' => (int) env('PEST_E2E_SERVER_READY_TIMEOUT_SECONDS', 45),
     ],
     'parallel' => [
         // Deprecated alias for server.port — kept for backward compatibility.

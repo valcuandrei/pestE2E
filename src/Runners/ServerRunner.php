@@ -77,7 +77,7 @@ final class ServerRunner
         }
 
         $this->waitUntilReady(
-            timeoutSeconds: 12,
+            timeoutSeconds: self::readyTimeoutSeconds(),
         );
 
         return $callback($this->baseUrl());
@@ -98,25 +98,7 @@ final class ServerRunner
 
         $publicPath = $basePath.'/public';
 
-        $env = array_merge($_ENV, ParallelWorkerContext::serverEnvironment(), [
-            'APP_ENV' => 'testing',
-            'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
-            'APP_URL' => $this->baseUrl(),
-            'PEST_E2E_BASE_PATH' => $basePath,
-            'PEST_E2E_PUBLIC_PATH' => $publicPath,
-            // phpunit.xml sets SESSION_DRIVER=array for unit/feature tests, but the E2E
-            // server runs in a separate process and needs a persistent session driver
-            // so auth sessions survive across requests.
-            'SESSION_DRIVER' => ($_ENV['SESSION_DRIVER'] ?? '') === 'array' ? 'database' : ($_ENV['SESSION_DRIVER'] ?? 'database'),
-            // Single worker for PHP built-in server to avoid session/state issues.
-            // Not set on Windows: PHP_CLI_SERVER_WORKERS uses fork() which is unsupported there.
-        ]);
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            unset($env['PHP_CLI_SERVER_WORKERS']);
-        } else {
-            $env['PHP_CLI_SERVER_WORKERS'] = '1';
-        }
+        $env = self::buildProcessEnvironment($this->baseUrl(), $basePath, $publicPath);
 
         $this->process = new Process(
             $this->command(),
@@ -244,6 +226,68 @@ final class ServerRunner
     public function process(): ?Process
     {
         return $this->process;
+    }
+
+    /**
+     * Resolve the managed-server readiness ceiling (seconds).
+     *
+     * Reads `pest-e2e.server.ready_timeout_seconds`; returns 45 if the key is
+     * missing (e.g. an older published config) or the value is not a positive
+     * integer, so upgrading callers get the sane default automatically.
+     *
+     * @internal Public so tests can assert the resolution contract without
+     * spawning a managed server.
+     */
+    public static function readyTimeoutSeconds(): int
+    {
+        $configured = config('pest-e2e.server.ready_timeout_seconds');
+
+        if (is_int($configured) && $configured > 0) {
+            return $configured;
+        }
+
+        if (is_numeric($configured) && (int) $configured > 0) {
+            return (int) $configured;
+        }
+
+        return 45;
+    }
+
+    /**
+     * Build the environment array passed to the managed server process.
+     *
+     * @internal Extracted so tests can assert the environment contract
+     * (in particular, that no invalid `PHP_CLI_SERVER_WORKERS=1` is injected)
+     * without spawning a real Laravel dev server.
+     *
+     * Returns the raw env array; callers pass it through
+     * {@see ProcessEnvironment::normalize()} before handing it to Symfony Process.
+     *
+     * @return array<mixed>
+     */
+    public static function buildProcessEnvironment(string $baseUrl, string $basePath, string $publicPath): array
+    {
+        $env = array_merge($_ENV, ParallelWorkerContext::serverEnvironment(), [
+            'APP_ENV' => 'testing',
+            'PEST_E2E_AUTH_ROUTE_ENABLED' => 'true',
+            'APP_URL' => $baseUrl,
+            'PEST_E2E_BASE_PATH' => $basePath,
+            'PEST_E2E_PUBLIC_PATH' => $publicPath,
+            // phpunit.xml sets SESSION_DRIVER=array for unit/feature tests, but the E2E
+            // server runs in a separate process and needs a persistent session driver
+            // so auth sessions survive across requests.
+            'SESSION_DRIVER' => ($_ENV['SESSION_DRIVER'] ?? '') === 'array' ? 'database' : ($_ENV['SESSION_DRIVER'] ?? 'database'),
+        ]);
+
+        // PHP_CLI_SERVER_WORKERS is intentionally not forced. Each parallel Pest
+        // worker already gets its own isolated managed server (see
+        // ParallelWorkerContext::serverPort()), so multi-process CLI workers here
+        // would only add contention. Leaving the variable unset gives PHP's
+        // normal single-process dev server; PHP 8.5 explicitly rejects the value
+        // "1" with "number of workers must be larger than 1".
+        unset($env['PHP_CLI_SERVER_WORKERS']);
+
+        return $env;
     }
 
     /**
