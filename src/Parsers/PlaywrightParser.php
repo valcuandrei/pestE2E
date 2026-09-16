@@ -167,9 +167,7 @@ final class PlaywrightParser implements JsonParserContract
             status: $status,
             file: $file,
             durationMs: $durationMs,
-            id: null,
             error: $error,
-            artifacts: null,
             extraLines: $extraLines,
         );
     }

@@ -72,9 +72,6 @@ final readonly class E2ERunner
                 $synthetic = new JsonReportTestDTO(
                     name: 'E2E process failed',
                     status: TestStatusType::FAILED,
-                    file: null,
-                    durationMs: null,
-                    id: null,
                     error: new JsonReportErrorDTO($message),
                 );
 

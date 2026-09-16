@@ -297,7 +297,6 @@ final readonly class JsonReportTestDTO
         return new self(
             name: 'test',
             status: TestStatusType::PASSED,
-            file: null,
             durationMs: 1000,
             extraLines: [],
         );

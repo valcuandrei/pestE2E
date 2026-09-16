@@ -72,7 +72,6 @@ final readonly class ProcessPlanDTO
             debug: $this->debug,
             commandPreview: $this->commandPreview,
             params: $this->params,
-            paramsJsonInline: null,
             paramsJsonFilePath: $path,
             reportDirectory: $this->reportDirectory,
         );

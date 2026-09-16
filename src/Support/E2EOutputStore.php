@@ -96,9 +96,7 @@ final class E2EOutputStore
      */
     public function putForTest(string $testId, E2EOutputEntryDTO $entry): void
     {
-        if (! isset(self::$perTestEntries[$testId])) {
-            self::$perTestEntries[$testId] = [];
-        }
+        self::$perTestEntries[$testId] ??= [];
 
         self::$perTestEntries[$testId][] = $entry;
 

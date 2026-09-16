@@ -261,7 +261,7 @@ final class E2ETargetHandle
         $errorMessage = null;
         $errorStack = null;
 
-        if (! $ok && $failures === [] && $thrown !== null) {
+        if (! $ok && $failures === [] && $thrown instanceof RuntimeException) {
             $errorMessage = $thrown->getMessage();
             $errorStack = $thrown->getTraceAsString();
         }
