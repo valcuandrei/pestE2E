@@ -61,8 +61,11 @@ final class PestE2EServiceProvider extends ServiceProvider
                 __DIR__.'/../resources/js/pest-e2e/core.mjs' => resource_path('js/pest-e2e/core.mjs'),
             ], 'pest-e2e-js-harness');
 
+            // playwright.mjs imports parseSetCookies from a sibling
+            // setCookieParser.mjs; both files must publish together.
             $this->publishes([
                 __DIR__.'/../resources/js/pest-e2e/playwright.mjs' => resource_path('js/pest-e2e/playwright.mjs'),
+                __DIR__.'/../resources/js/pest-e2e/setCookieParser.mjs' => resource_path('js/pest-e2e/setCookieParser.mjs'),
             ], 'pest-e2e-js-playwright');
 
             $this->publishes([

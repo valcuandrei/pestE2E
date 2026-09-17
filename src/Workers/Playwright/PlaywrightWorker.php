@@ -72,7 +72,12 @@ final class PlaywrightWorker implements JsWorkerContract
      */
     private function playwrightTestArgs(ProcessPlanDTO $plan): array
     {
-        $args = ['test'];
+        // pest-e2e's parallelism contract is: outer Pest/ParaTest owns the
+        // concurrency; each pest-e2e Playwright invocation runs one selected
+        // test with one Playwright worker. Explicitly pin `--workers=1` so
+        // Playwright's default of `Math.ceil(os.cpus() / 2)` never fires and
+        // spawns extra worker processes on top of the outer ParaTest workers.
+        $args = ['test', '--workers=1'];
 
         if (is_string($plan->testFilter) && $plan->testFilter !== '') {
             $args[] = '--grep';
