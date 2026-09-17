@@ -26,6 +26,16 @@
             <directory suffix=".php">./tests</directory>
         </testsuite>
     </testsuites>
+    <php>
+        <!-- The admission controller and warm-browser manager are activated
+             from real Playwright invocations; the package's own unit / feature
+             suite exercises them directly via injected controllers and fakes.
+             Keeping them disabled here prevents every E2ERunner-touching test
+             from paying ~100ms of CPU sampling + a real chromium.launchServer()
+             cold start. -->
+        <env name="PEST_E2E_ADMISSION_ENABLED" value="false" force="true"/>
+        <env name="PEST_E2E_WARM_BROWSER_ENABLED" value="false" force="true"/>
+    </php>
     <source>
         <include>
             <directory suffix=".php">./src</directory>
