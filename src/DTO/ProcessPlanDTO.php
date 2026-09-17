@@ -20,6 +20,7 @@ final readonly class ProcessPlanDTO
         public ?string $paramsJsonInline = null,
         public ?string $paramsJsonFilePath = null,
         public ?string $reportDirectory = null,
+        public ?string $specPath = null,
     ) {}
 
     /**
@@ -38,6 +39,7 @@ final readonly class ProcessPlanDTO
             paramsJsonInline: $params instanceof ParamsDTO ? $this->paramsJsonInline : null,
             paramsJsonFilePath: $params instanceof ParamsDTO ? $this->paramsJsonFilePath : null,
             reportDirectory: $this->reportDirectory,
+            specPath: $this->specPath,
         );
     }
 
@@ -56,6 +58,7 @@ final readonly class ProcessPlanDTO
             params: $this->params,
             paramsJsonInline: $paramsJsonInline,
             reportDirectory: $this->reportDirectory,
+            specPath: $this->specPath,
         );
     }
 
@@ -74,6 +77,7 @@ final readonly class ProcessPlanDTO
             params: $this->params,
             paramsJsonFilePath: $path,
             reportDirectory: $this->reportDirectory,
+            specPath: $this->specPath,
         );
     }
 

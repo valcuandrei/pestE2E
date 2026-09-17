@@ -83,8 +83,9 @@ final readonly class ProcessPlanBuilder
             testFilter: $context->testFilter,
             headed: $isHeaded,
             debug: CliOptions::$debug,
-            commandPreview: $this->commandPreview($context->testFilter, $isHeaded, CliOptions::$debug),
+            commandPreview: $this->commandPreview($context->testFilter, $isHeaded, CliOptions::$debug, $context->specPath),
             reportDirectory: $context->reportDirectory,
+            specPath: $context->specPath,
         );
 
         if ($context->params === []) {
@@ -113,6 +114,7 @@ final readonly class ProcessPlanBuilder
                 commandPreview: $plan->commandPreview,
                 params: $paramsDto,
                 reportDirectory: $plan->reportDirectory,
+                specPath: $plan->specPath,
             )->withParamsJsonInline($json);
         }
 
@@ -131,6 +133,7 @@ final readonly class ProcessPlanBuilder
             commandPreview: $plan->commandPreview,
             params: $paramsDto,
             reportDirectory: $plan->reportDirectory,
+            specPath: $plan->specPath,
         )->withParamsJsonFilePath($filePath);
     }
 
@@ -145,7 +148,7 @@ final readonly class ProcessPlanBuilder
         return json_encode($paramsDto->toArray(), JSON_THROW_ON_ERROR);
     }
 
-    private function commandPreview(?string $testFilter, bool $headed, bool $debug): string
+    private function commandPreview(?string $testFilter, bool $headed, bool $debug, ?string $specPath): string
     {
         $parts = ['playwright', 'test', '--reporter', 'json'];
 
@@ -160,6 +163,10 @@ final readonly class ProcessPlanBuilder
 
         if ($debug) {
             $parts[] = '--debug';
+        }
+
+        if (is_string($specPath) && $specPath !== '') {
+            $parts[] = $specPath;
         }
 
         return implode(' ', $parts);

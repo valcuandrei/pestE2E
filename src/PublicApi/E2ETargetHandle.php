@@ -38,6 +38,8 @@ final class E2ETargetHandle
 
     private ?string $testFilter = null;
 
+    private ?string $specPath = null;
+
     public function __construct(
         private readonly string $target,
         private readonly CompositionRoot $root,
@@ -230,6 +232,7 @@ final class E2ETargetHandle
                         options: $this->options,
                         runId: $runId,
                         testFilter: $this->testFilter,
+                        specPath: $this->specPath,
                     );
 
                     $ok = ! $report->hasFailures();
@@ -329,6 +332,43 @@ final class E2ETargetHandle
     {
         $clone = clone $this;
         $clone->testFilter = $testName;
+
+        return $clone;
+    }
+
+    /**
+     * spec() — pin the exact Playwright spec file for this invocation.
+     *
+     * Playwright normally walks every spec file under `testDir` to build its
+     * test list before applying `--grep`. On this project that overhead is
+     * ~7 seconds per pest test even though `--grep` ultimately selects a
+     * single test. Passing an explicit spec path skips full-project
+     * discovery: Playwright loads only that file.
+     *
+     * The path must be:
+     *   - non-empty
+     *   - relative (no leading `/` or drive letter)
+     *   - free of `..` traversal segments
+     *   - one of the supported spec extensions
+     *     (`.spec.ts`, `.spec.tsx`, `.spec.js`, `.spec.mjs`, `.spec.cjs`,
+     *      `.test.ts`, `.test.tsx`, `.test.js`, `.test.mjs`, `.test.cjs`).
+     *
+     * The path is resolved relative to the target's `dir` — the same
+     * working directory Playwright is invoked from. Windows-style `\`
+     * separators are normalised to `/` before validation.
+     *
+     * When no spec is supplied, the legacy full-discovery + `--grep`
+     * behaviour is preserved so existing consumers do not have to migrate
+     * in lock-step.
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function spec(string $path): self
+    {
+        $normalized = $this->validateSpecPath($path);
+
+        $clone = clone $this;
+        $clone->specPath = $normalized;
 
         return $clone;
     }
@@ -551,5 +591,82 @@ final class E2ETargetHandle
             "E2E failures for {$this->target} ({$runId}):\n- ".implode("\n- ", $lines)
                 ."\n(See inline E2E output above for full details.)"
         );
+    }
+
+    /**
+     * Validate a caller-supplied spec path and return the normalised form
+     * that will be passed to Playwright.
+     *
+     * Rejects empty strings, absolute paths, `..` traversal, and unknown
+     * extensions. Extensions accepted: `.spec.ts`, `.spec.tsx`, `.spec.js`,
+     * `.spec.mjs`, `.spec.cjs`, `.test.ts`, `.test.tsx`, `.test.js`,
+     * `.test.mjs`, `.test.cjs`. Path is expected relative to the target
+     * `dir` (Playwright's CWD). Backslashes are normalised to forward
+     * slashes so callers on Windows can supply either separator.
+     */
+    private function validateSpecPath(string $path): string
+    {
+        $trimmed = trim($path);
+
+        if ($trimmed === '') {
+            throw new \InvalidArgumentException('spec(): path may not be empty.');
+        }
+
+        // Normalise Windows separators to forward slashes so validation and
+        // Playwright's CLI both see a consistent form.
+        $normalized = str_replace('\\', '/', $trimmed);
+
+        if (str_starts_with($normalized, '/')) {
+            throw new \InvalidArgumentException(
+                "spec(): path must be relative to the target directory; got absolute path '{$path}'."
+            );
+        }
+
+        // Windows drive letter, e.g. `C:/…`.
+        if (preg_match('/^[A-Za-z]:/', $normalized) === 1) {
+            throw new \InvalidArgumentException(
+                "spec(): path must be relative; got drive-letter path '{$path}'."
+            );
+        }
+
+        // Reject `..` as a path segment anywhere.
+        foreach (explode('/', $normalized) as $segment) {
+            if ($segment === '..') {
+                throw new \InvalidArgumentException(
+                    "spec(): path may not contain '..' traversal; got '{$path}'."
+                );
+            }
+        }
+
+        // Reject NUL bytes / control characters that could break process
+        // argument passing.
+        if (preg_match('/[\x00-\x1F]/', $normalized) === 1) {
+            throw new \InvalidArgumentException(
+                "spec(): path contains control characters; got '{$path}'."
+            );
+        }
+
+        $supportedExtensions = [
+            '.spec.ts', '.spec.tsx', '.spec.js', '.spec.mjs', '.spec.cjs',
+            '.test.ts', '.test.tsx', '.test.js', '.test.mjs', '.test.cjs',
+        ];
+
+        $matched = false;
+        $lower = strtolower($normalized);
+
+        foreach ($supportedExtensions as $ext) {
+            if (str_ends_with($lower, $ext)) {
+                $matched = true;
+                break;
+            }
+        }
+
+        if (! $matched) {
+            throw new \InvalidArgumentException(
+                "spec(): unsupported extension for '{$path}'; expected one of ".implode(', ', $supportedExtensions).'.'
+            );
+        }
+
+        return $normalized;
     }
 }

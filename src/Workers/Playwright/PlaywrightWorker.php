@@ -98,6 +98,17 @@ final class PlaywrightWorker implements JsWorkerContract
         $args[] = '--reporter';
         $args[] = 'json';
 
+        // Positional spec path (F3). When present, Playwright loads only this
+        // file instead of walking the whole test directory. Validation is
+        // enforced at the public API entry point (`E2ETargetHandle::spec()`),
+        // so anything reaching us here is already normalised and safe.
+        //
+        // Order matters: positional test-file arguments belong at the tail so
+        // they are not confused with option values.
+        if (is_string($plan->specPath) && $plan->specPath !== '') {
+            $args[] = $plan->specPath;
+        }
+
         return $args;
     }
 

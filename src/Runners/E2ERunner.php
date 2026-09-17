@@ -43,6 +43,10 @@ final readonly class E2ERunner
      * @param  array<string,mixed>  $params
      * @param  ProcessOptionsDTO|null  $options  (optional) process options
      * @param  string|null  $testFilter  (optional) test filter
+     * @param  string|null  $specPath  (optional) validated spec file path,
+     *                                 relative to the target `dir`. When set,
+     *                                 Playwright receives it as a positional
+     *                                 argument and skips full-project discovery.
      */
     public function run(
         string $targetName,
@@ -51,6 +55,7 @@ final readonly class E2ERunner
         ?ProcessOptionsDTO $options = null,
         ?string $runId = null,
         ?string $testFilter = null,
+        ?string $specPath = null,
     ): JsonReportDTO {
         $target = $this->registry->get($targetName);
         $runId ??= $this->runIdGenerator->generate();
@@ -58,7 +63,7 @@ final readonly class E2ERunner
             target: $target->name,
             runId: $runId,
         );
-        $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter, $resolvedReportDir);
+        $context = RunContextDTO::make($target, $runId, $env, $params, $testFilter, $resolvedReportDir, $specPath);
         $plan = $this->planBuilder->build($context, $options);
         $runResult = $this->jsWorker->run($plan);
 
