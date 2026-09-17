@@ -39,7 +39,14 @@ async function main() {
         headless: true,
     });
 
-    const wsEndpoint = server.wsEndpoint();
+    // Playwright's launchServer emits `ws://localhost:<port>/...`. In WSL /
+    // Sail / any environment where the loopback interface prefers IPv6,
+    // `localhost` resolves to `::1` and the connect fails with
+    // `connect ECONNREFUSED ::1:<port>` because the launch-server only binds
+    // to IPv4 127.0.0.1. Rewrite the host component so the wsEndpoint is
+    // explicitly IPv4 loopback and always reachable.
+    let wsEndpoint = server.wsEndpoint();
+    wsEndpoint = wsEndpoint.replace(/^ws:\/\/localhost([:/])/, 'ws://127.0.0.1$1');
 
     // Handshake: emit exactly one line of JSON. The PHP side parses this;
     // anything else printed before it will confuse the handshake.
