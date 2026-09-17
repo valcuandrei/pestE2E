@@ -117,32 +117,27 @@ final class AgentOutputAggregator
 
     private static function runDirectory(): string
     {
-        $laravelPath = self::laravelStoragePath();
+        return ReportPathPolicy::resolve(
+            null,
+            static function (): string {
+                if (function_exists('app')) {
+                    try {
+                        return app()->storagePath('framework/testing/pest-e2e-agent-output');
+                    } catch (\Throwable) {
+                        // Laravel container unavailable; fall through to CWD.
+                    }
+                }
 
-        if ($laravelPath !== null) {
-            return $laravelPath;
-        }
+                $cwd = getcwd();
 
-        $cwd = getcwd();
+                if ($cwd !== false && is_dir($cwd.'/storage')) {
+                    return $cwd.'/storage/framework/testing/pest-e2e-agent-output';
+                }
 
-        if ($cwd !== false && is_dir($cwd.'/storage')) {
-            return $cwd.'/storage/framework/testing/pest-e2e-agent-output';
-        }
-
-        return rtrim(sys_get_temp_dir(), '/').'/pest-e2e-agent-output';
-    }
-
-    private static function laravelStoragePath(): ?string
-    {
-        if (! function_exists('app')) {
-            return null;
-        }
-
-        try {
-            return app()->storagePath('framework/testing/pest-e2e-agent-output');
-        } catch (\Throwable) {
-            return null;
-        }
+                return '';
+            },
+            'pest-e2e-agent-output',
+        );
     }
 
     /**

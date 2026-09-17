@@ -11,6 +11,7 @@ use ValcuAndrei\PestE2E\Support\AgentOutputIntent;
 use ValcuAndrei\PestE2E\Support\AgentParallelMode;
 use ValcuAndrei\PestE2E\Support\ArtisanTestArgvBridge;
 use ValcuAndrei\PestE2E\Support\CliOptions;
+use ValcuAndrei\PestE2E\Support\ReportPathPolicy;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
 
 beforeEach(function (): void {
@@ -74,10 +75,17 @@ it('runs headless on a second run without --browse after a browse run', function
 });
 
 it('does not re-enable browse from a stale agent intent file', function (): void {
-    $directory = storage_path('framework/testing/pest-e2e-agent-output');
+    // Route the intent-file setup through the same path policy the runtime
+    // uses so this fixture keeps working across mixed-UID host↔container
+    // environments (e.g. root-owned vendor from a prior `docker exec` install).
+    $directory = ReportPathPolicy::resolve(
+        null,
+        static fn (): string => storage_path('framework/testing/pest-e2e-agent-output'),
+        'pest-e2e-agent-output',
+    );
     $path = $directory.'/.agent-intent.json';
 
-    if (! is_dir($directory) && ! @mkdir($directory, 0775, true) && ! is_dir($directory)) {
+    if (! is_dir($directory) && ! @mkdir($directory, 0700, true) && ! is_dir($directory)) {
         throw new RuntimeException("Unable to create intent dir: {$directory}");
     }
 
@@ -108,7 +116,13 @@ it('does not persist browse or debug in the agent intent file', function (): voi
 
     AgentOutputIntent::persistFromEnvironment();
 
-    $path = storage_path('framework/testing/pest-e2e-agent-output/.agent-intent.json');
+    // Same policy-resolved directory the runtime writes into.
+    $directory = ReportPathPolicy::resolve(
+        null,
+        static fn (): string => storage_path('framework/testing/pest-e2e-agent-output'),
+        'pest-e2e-agent-output',
+    );
+    $path = $directory.'/.agent-intent.json';
     $contents = is_file($path) ? file_get_contents($path) : false;
 
     expect($contents)->toBeString();

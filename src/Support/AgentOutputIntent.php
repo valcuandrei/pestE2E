@@ -92,20 +92,22 @@ final class AgentOutputIntent
 
     private static function directory(): string
     {
-        if (function_exists('storage_path')) {
-            try {
-                return storage_path('framework/testing/pest-e2e-agent-output');
-            } catch (\Throwable) {
-                // storage_path may be unavailable outside a booted app
-            }
-        }
+        return ReportPathPolicy::resolve(
+            null,
+            static function (): string {
+                if (function_exists('storage_path')) {
+                    return storage_path('framework/testing/pest-e2e-agent-output');
+                }
 
-        $cwd = getcwd();
+                $cwd = getcwd();
 
-        if ($cwd !== false && is_dir($cwd.'/storage')) {
-            return $cwd.'/storage/framework/testing/pest-e2e-agent-output';
-        }
+                if ($cwd !== false && is_dir($cwd.'/storage')) {
+                    return $cwd.'/storage/framework/testing/pest-e2e-agent-output';
+                }
 
-        return rtrim(sys_get_temp_dir(), '/').'/pest-e2e-agent-output';
+                return '';
+            },
+            'pest-e2e-agent-output',
+        );
     }
 }

@@ -36,7 +36,15 @@ return [
         'base_port' => (int) env('PEST_E2E_PARALLEL_BASE_PORT', env('PEST_E2E_SERVER_PORT', 8800)),
     ],
     'reports' => [
-        'base_dir' => storage_path('framework/testing/pest-e2e'),
+        // `null` (default) means: use `storage_path('framework/testing/pest-e2e')`
+        // when it is writable by the current process; otherwise fall back to a
+        // deterministic private directory scoped to the effective UID and the
+        // current project root (see ReportPathPolicy).
+        //
+        // Any non-null string is treated as an explicit directive from the
+        // consumer's config: it will be used as-is, and no automatic fallback
+        // will be applied if that directory turns out not to be writable.
+        'base_dir' => env('PEST_E2E_REPORTS_BASE_DIR'),
         'prune' => [
             'enabled' => env('PEST_E2E_REPORT_PRUNE_ENABLED', true),
             'keep_runs' => (int) env('PEST_E2E_REPORT_PRUNE_KEEP_RUNS', 50),
