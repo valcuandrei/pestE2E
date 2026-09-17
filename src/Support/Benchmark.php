@@ -31,11 +31,8 @@ final class Benchmark
      */
     public static function mark(string $label, string $name = 'default'): array
     {
-        if (! isset(self::$startTimes[$name])) {
-            self::start($name);
-        }
+        $entries = self::entriesOrStart($name);
         $time = microtime(true);
-        $entries = self::$startTimes[$name];
         $last = $entries[array_key_last($entries)];
         $start = $entries[0]['time'];
         self::$startTimes[$name][] = [
@@ -54,11 +51,8 @@ final class Benchmark
      */
     public static function end(string $name = 'default'): array
     {
-        if (! isset(self::$startTimes[$name])) {
-            self::start($name);
-        }
+        $entries = self::entriesOrStart($name);
         $time = microtime(true);
-        $entries = self::$startTimes[$name];
         $last = $entries[array_key_last($entries)];
         $start = $entries[0]['time'];
 
@@ -66,6 +60,25 @@ final class Benchmark
             'label' => 'From '.$last['label'].' to end took '.self::formatDuration($time - $last['time']).', total time: '.self::formatDuration($time - $start),
             'time' => $time - $start,
         ];
+    }
+
+    /**
+     * Ensure a named timeline has at least one entry and return it as a
+     * non-empty list. Guarantees `array_key_last() !== null` so callers can
+     * index safely.
+     *
+     * @return non-empty-list<array{label: string, time: float}>
+     */
+    private static function entriesOrStart(string $name): array
+    {
+        if (! isset(self::$startTimes[$name]) || self::$startTimes[$name] === []) {
+            self::start($name);
+        }
+
+        /** @var non-empty-list<array{label: string, time: float}> $entries */
+        $entries = self::$startTimes[$name];
+
+        return $entries;
     }
 
     private static function formatDuration(float $time): string
