@@ -66,11 +66,13 @@ async function main() {
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGHUP', () => shutdown('SIGHUP'));
 
-    // If the parent process disappears (pest exited without cleanup), stdin
-    // will close. Use that as an additional shutdown trigger.
-    process.stdin.on('end', () => shutdown('stdin-end'));
-    process.stdin.on('close', () => shutdown('stdin-close'));
-    process.stdin.resume();
+    // Note: we deliberately do NOT listen on stdin `end`/`close` — Symfony
+    // Process (the PHP-side spawner) closes the child's stdin immediately
+    // after start(), which would fire those events instantly and shut the
+    // warm browser down before any test connected. The parent-death path is
+    // covered by SIGTERM/SIGHUP delivery when PHP dies with an unclosed
+    // process handle, and by the PHP-side shutdown handler that explicitly
+    // Process::stop()s each worker's warm browser at suite end.
 }
 
 main().catch((err) => {
