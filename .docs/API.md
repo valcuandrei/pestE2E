@@ -108,6 +108,11 @@ e2e('frontend')->actingAs($user, [
 ]);
 ```
 
+`actingAs()` only records who to authenticate as. The ticket is issued by
+`run()` immediately before the JS runner is launched — after any admission
+wait — so `auth.ttl_seconds` only has to cover JS-runner startup, and each
+`run()` on the same handle receives a fresh ticket.
+
 The JS runner should POST the ticket to the configured auth route:
 
 - default: `/pest-e2e/auth/login`

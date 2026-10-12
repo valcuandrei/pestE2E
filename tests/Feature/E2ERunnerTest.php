@@ -13,8 +13,11 @@ use ValcuAndrei\PestE2E\Parsers\PlaywrightParser;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Runners\E2ERunner;
+use ValcuAndrei\PestE2E\Support\AdmissionController;
+use ValcuAndrei\PestE2E\Support\FakeResourceSampler;
 use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
 use ValcuAndrei\PestE2E\Support\TempParamsFileWriter;
+use ValcuAndrei\PestE2E\Tests\Fakes\FixedRunIdGenerator;
 
 it('runs a target command and ingests the json report', function () {
     $runId = 'run-123';
@@ -81,4 +84,83 @@ it('runs a target command and ingests the json report', function () {
 
     expect($report->target)->toBe($targetName)
         ->and($report->runId)->toBe($runId);
+});
+
+it('resolves late params only after the run has been admitted', function () {
+    $lockDir = sys_get_temp_dir().'/pest-e2e-late-params-tests-'.uniqid();
+    mkdir($lockDir, 0700, true);
+
+    $timeline = [];
+    $now = 1000.0;
+
+    $registry = new TargetRegistry;
+    $registry->put(new TargetConfigDTO(name: 'frontend', dir: getcwd(), env: [], params: []));
+
+    $worker = new class($timeline) implements JsWorkerContract
+    {
+        /** @param  array<int, string>  $timeline */
+        public function __construct(private array &$timeline) {}
+
+        public function run(ProcessPlanDTO $plan): ProcessResultDTO
+        {
+            $this->timeline[] = 'launched with '.json_encode($plan->params?->params);
+
+            return new ProcessResultDTO(
+                exitCode: 0,
+                stdout: JsonReportDTO::fakeWithPassedTest()->withTarget('frontend')->withRunId('run-123')->toJson(),
+                stderr: '',
+                durationSeconds: 0.01,
+            );
+        }
+    };
+
+    $runner = new E2ERunner(
+        registry: $registry,
+        planBuilder: new ProcessPlanBuilder(new TempParamsFileWriter),
+        jsWorker: $worker,
+        reportReader: new JsonReportReader(new PlaywrightParser),
+        runIdGenerator: new FixedRunIdGenerator('run-123'),
+        reportDirectoryManager: new ReportDirectoryManager,
+        admissionController: new AdmissionController(
+            sampler: (new FakeResourceSampler)->enqueue(95.0, 10.0)->enqueue(10.0, 10.0),
+            cpuHighPct: 80.0,
+            cpuLowPct: 75.0,
+            memoryHighPct: 85.0,
+            memoryLowPct: 80.0,
+            cooldownMs: 0,
+            backoffMs: 1000,
+            jitterMs: 0,
+            maxWaitSeconds: 60,
+            lockPath: $lockDir.'/admission.lock',
+            sleeper: function (float $seconds) use (&$timeline, &$now): void {
+                $timeline[] = 'queued';
+                $now += $seconds;
+            },
+            clock: function () use (&$now): float {
+                return $now;
+            },
+        ),
+    );
+
+    try {
+        $runner->run(
+            targetName: 'frontend',
+            params: ['auth' => ['mode' => 'session'], 'extra' => 'yes'],
+            lateParams: function () use (&$timeline): array {
+                $timeline[] = 'late params resolved';
+
+                return ['auth' => ['ticket' => 'fresh']];
+            },
+        );
+    } finally {
+        @unlink($lockDir.'/admission.lock');
+        @unlink($lockDir.'/admission.lock.state');
+        @rmdir($lockDir);
+    }
+
+    expect($timeline)->toBe([
+        'queued',
+        'late params resolved',
+        'launched with {"auth":{"mode":"session","ticket":"fresh"},"extra":"yes"}',
+    ]);
 });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Runners;
 
+use Closure;
 use RuntimeException;
 use Throwable;
 use ValcuAndrei\PestE2E\Builders\ProcessPlanBuilder;
@@ -48,6 +49,11 @@ final class E2ERunner
      *                                 relative to the target `dir`. When set,
      *                                 Playwright receives it as a positional
      *                                 argument and skips full-project discovery.
+     * @param  (Closure(): array<string, mixed>)|null  $lateParams  (optional) params resolved only once the run
+     *                                                              has been admitted, immediately before the JS
+     *                                                              runner is launched. Anything short-lived (auth
+     *                                                              tickets) belongs here so that queueing time
+     *                                                              does not count against its lifetime.
      */
     public function run(
         string $targetName,
@@ -57,6 +63,7 @@ final class E2ERunner
         ?string $runId = null,
         ?string $testFilter = null,
         ?string $specPath = null,
+        ?Closure $lateParams = null,
     ): JsonReportDTO {
         $target = $this->registry->get($targetName);
         $runId ??= $this->runIdGenerator->generate();
@@ -92,6 +99,13 @@ final class E2ERunner
                 // stderr but does not abort the run.
                 fwrite(STDERR, "\npest-e2e: warm-browser unavailable, falling back to cold launch — {$warmBrowserError->getMessage()}\n");
             }
+        }
+
+        // Everything that can make this run wait (admission queue, warm
+        // browser startup) is behind us; the next step launches the JS runner.
+        if ($lateParams instanceof Closure) {
+            /** @var array<string, mixed> $params */
+            $params = array_replace_recursive($params, $lateParams());
         }
 
         $context = RunContextDTO::make($target, $runId, $envWithWarmBrowser, $params, $testFilter, $resolvedReportDir, $specPath);

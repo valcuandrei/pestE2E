@@ -555,7 +555,8 @@ Security:
 - only enabled when `PEST_E2E_AUTH_ROUTE_ENABLED=true`
 - requires a header, default: `X-Pest-E2E: 1`
 - tickets are single-use
-- tickets are short-lived
+- tickets are short-lived, counted from the moment the browser run is launched (time spent queued behind other parallel E2E runs does not count)
+- a ticket that was never exchanged is revoked when its run ends
 
 ---
 
@@ -593,7 +594,7 @@ Key config keys in `config/pest-e2e.php`:
 | --- | --- |
 | `auth.route` | Auth endpoint path. Default: `/pest-e2e/auth/login` |
 | `auth.route_enabled` | Enable auth route. Default: `false`, set via `PEST_E2E_AUTH_ROUTE_ENABLED` |
-| `auth.ttl_seconds` | Auth ticket TTL. Default: `60` |
+| `auth.ttl_seconds` | Auth ticket TTL, measured from JS-runner launch (not from `actingAs()`). Default: `60` |
 | `auth.header.name` / `auth.header.value` | Header required for auth requests. Default: `X-Pest-E2E: 1` |
 | `server.driver` | Server runner: `artisan` or `php_builtin`. Default: `php_builtin` |
 | `server.host` | Bind address for the managed server. Default: `127.0.0.1` |

@@ -71,8 +71,10 @@ Authentication is transferred using a **one-time E2E login ticket**.
 
 Flow:
 1. Pest creates a Laravel user (factories, seeders, personas)
-2. Pest issues a short-lived, single-use auth ticket
-3. Ticket is passed to JS via `params.auth.ticket`
+2. `actingAs()` records the identity; no ticket exists yet
+3. Once the run has been admitted (admission queue, warm browser) and the
+   JS runner is about to be launched, Pest issues a short-lived, single-use
+   auth ticket and passes it to JS via `params.auth.ticket`
 4. JS calls a **testing-only auth endpoint** provided by the package
 5. The app authenticates the browser using:
    - session cookies (default)
@@ -81,6 +83,12 @@ Flow:
 Tickets are single-use, short-lived (default 60s), and validated
 by a small package-owned ticket store. The auth endpoint is only
 loaded in `testing` and gated by a header (`X-Pest-E2E: 1` by default).
+
+The ticket lifetime starts at JS-runner launch, never at `actingAs()`:
+a run may be queued by admission control for longer than any sensible
+ticket TTL (up to `admission.max_wait_seconds`), and queueing must not
+consume the credential. Every `run()` gets its own ticket, and a ticket
+the JS runner never exchanged is revoked when the run ends.
 
 ### Server-side responsibility
 

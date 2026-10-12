@@ -6,6 +6,8 @@ namespace ValcuAndrei\PestE2E\PublicApi;
 
 use Pest\TestSuite;
 use RuntimeException;
+use Throwable;
+use ValcuAndrei\PestE2E\Contracts\AuthTicketStoreContract;
 use ValcuAndrei\PestE2E\DTO\AuthPayloadDTO;
 use ValcuAndrei\PestE2E\DTO\E2EOutputEntryDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportDTO;
@@ -20,6 +22,7 @@ use ValcuAndrei\PestE2E\Support\CliOptions;
 use ValcuAndrei\PestE2E\Support\CurrentPhpunitTestContext;
 use ValcuAndrei\PestE2E\Support\E2EOutputFormatter;
 use ValcuAndrei\PestE2E\Support\E2EOutputStore;
+use ValcuAndrei\PestE2E\Support\NullAuthTicketIssuer;
 use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
 use ValcuAndrei\PestE2E\Support\TimingProbe;
 
@@ -39,6 +42,16 @@ final class E2ETargetHandle
     private ?string $testFilter = null;
 
     private ?string $specPath = null;
+
+    /**
+     * Identity captured by actingAs(), waiting for its ticket.
+     *
+     * The ticket is deliberately not issued here: its lifetime must start
+     * when the browser is about to use it, not when the test asked for it.
+     *
+     * @var array{user: mixed, guard: string, mode: AuthModeType, meta: array<string, mixed>}|null
+     */
+    private ?array $pendingAuth = null;
 
     public function __construct(
         private readonly string $target,
@@ -91,12 +104,18 @@ final class E2ETargetHandle
 
         $clone = clone $this;
         $clone->params = $mergedParams;
+        $clone->pendingAuth = null;
 
         return $clone;
     }
 
     /**
-     * Issue an auth ticket for a user.
+     * Authenticate the run as a user.
+     *
+     * Only the identity is recorded here. The single-use ticket is issued by
+     * run(), after the run has been admitted and immediately before the JS
+     * runner is launched, so time spent queued behind other E2E work never
+     * counts against the ticket's lifetime.
      *
      * @param  array<string, mixed>  $options
      */
@@ -105,19 +124,63 @@ final class E2ETargetHandle
         [$guard, $mode, $meta] = $this->extractAuthOptions($options);
 
         $issuer = $this->root->authTicketIssuer();
-        $ticket = $issuer->issueForUser($user, [
+        if ($issuer instanceof NullAuthTicketIssuer) {
+            $issuer->issueForUser($user);
+        }
+
+        $clone = clone $this;
+        $clone->pendingAuth = [
+            'user' => $user,
+            'guard' => $guard,
+            'mode' => $mode,
+            'meta' => $meta,
+        ];
+
+        return $clone;
+    }
+
+    /**
+     * Issue the ticket for the identity captured by actingAs().
+     *
+     * @return array{0: non-empty-string, 1: array<string, mixed>}|null The ticket and the params carrying it.
+     */
+    private function issuePendingAuthTicket(): ?array
+    {
+        if ($this->pendingAuth === null) {
+            return null;
+        }
+
+        ['user' => $user, 'guard' => $guard, 'mode' => $mode, 'meta' => $meta] = $this->pendingAuth;
+
+        $ticket = $this->root->authTicketIssuer()->issueForUser($user, [
             'guard' => $guard,
             'meta' => $meta,
         ]);
 
-        return $this->withAuthTicket(
-            payload: new AuthPayloadDTO(
-                ticket: $ticket,
-                mode: $mode,
-                guard: $guard,
+        $payload = new AuthPayloadDTO(ticket: $ticket, mode: $mode, guard: $guard);
+
+        return [$ticket, [
+            'auth' => array_merge(
+                $payload->toArray(),
+                $meta !== [] ? ['meta' => $meta] : [],
             ),
-            meta: $meta,
-        );
+        ]];
+    }
+
+    /**
+     * Revoke a ticket the JS runner never exchanged, so it cannot outlive its run.
+     */
+    private function revokeAuthTicket(?string $ticket): void
+    {
+        if ($ticket === null) {
+            return;
+        }
+
+        try {
+            app(AuthTicketStoreContract::class)->consume($ticket);
+        } catch (Throwable) {
+            // The ticket still expires on its own.
+        }
     }
 
     /**
@@ -214,6 +277,7 @@ final class E2ETargetHandle
         $ok = false;
         $thrown = null;
         $extraLines = [];
+        $issuedTicket = null;
 
         if (CliOptions::$debug) {
             fwrite(STDERR, "\n⚠ Debug mode active. Browser will remain open on failure.\n");
@@ -224,7 +288,7 @@ final class E2ETargetHandle
 
             [$report, $ok, $thrown] = ServerRunner::instance($serverType)->whenReady(
                 /** @return array{0: JsonReportDTO, 1: bool, 2: ?RuntimeException} */
-                function (string $baseUrl) use ($runId): array {
+                function (string $baseUrl) use ($runId, &$issuedTicket): array {
                     $report = $this->root->runner()->run(
                         targetName: $this->target,
                         env: array_merge($this->env, ['APP_URL' => $baseUrl]),
@@ -233,6 +297,17 @@ final class E2ETargetHandle
                         runId: $runId,
                         testFilter: $this->testFilter,
                         specPath: $this->specPath,
+                        lateParams: function () use (&$issuedTicket): array {
+                            $issued = $this->issuePendingAuthTicket();
+
+                            if ($issued === null) {
+                                return [];
+                            }
+
+                            [$issuedTicket, $authParams] = $issued;
+
+                            return $authParams;
+                        },
                     );
 
                     $ok = ! $report->hasFailures();
@@ -241,11 +316,13 @@ final class E2ETargetHandle
                     return [$report, $ok, $thrown];
                 }
             );
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $ok = false;
             $thrown = $e instanceof RuntimeException
                 ? $e
                 : new RuntimeException($e->getMessage(), (int) $e->getCode(), $e);
+        } finally {
+            $this->revokeAuthTicket($issuedTicket);
         }
 
         $durationSeconds = microtime(true) - $startedAt;
@@ -434,7 +511,7 @@ final class E2ETargetHandle
                 if ($file !== '') {
                     return $this->relativeProjectPath($file);
                 }
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // TestSuite may be unavailable outside a running test
             }
         }
@@ -451,7 +528,7 @@ final class E2ETargetHandle
                 if (str_starts_with($absolute, $base)) {
                     return ltrim(substr($absolute, strlen($base)), DIRECTORY_SEPARATOR);
                 }
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // base_path may be unavailable
             }
         }
@@ -475,7 +552,7 @@ final class E2ETargetHandle
         if (function_exists('test')) {
             try {
                 $test = test();
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $test = null;
             }
         }
@@ -493,7 +570,7 @@ final class E2ETargetHandle
                 if (is_object($suite->test)) {
                     return $this->resolveTestName($suite->test);
                 }
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 return null;
             }
         }
@@ -509,7 +586,7 @@ final class E2ETargetHandle
         if (method_exists($test, 'getPrintableTestCaseMethodName')) {
             try {
                 $name = $test->getPrintableTestCaseMethodName();
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $name = null;
             }
 
@@ -532,7 +609,7 @@ final class E2ETargetHandle
                 }
 
                 $name = str_replace('_', ' ', $rawName);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $name = null;
             }
 
