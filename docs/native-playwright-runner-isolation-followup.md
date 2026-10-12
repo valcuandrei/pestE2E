@@ -253,7 +253,7 @@ None found that keeps Playwright's engine and removes the parent's load. An out-
 2. Confirm the persistent runner is dropped, including for ShowMyWork-only use. (It would work for today's ShowMyWork specs, but only by an unenforced convention.)
 3. Is the pre-warmed CLI worth a measured trial on the real suite, given that it helps only with CPU headroom?
 4. What should happen to `js_runner.mode` (`cold`/`warm`), which is documented but unimplemented?
-5. Repository housekeeping I did not touch: `docs/native-playwright-runner-investigation.md` is deleted in the working tree but still committed, and Astra's draft is untracked at `.docs/native-playwright-runner-investigation-astra.md`. `.docs/` ships to consumers; `docs/` does not.
+5. Repository housekeeping I did not touch: in the working tree the first report has been renamed to `docs/native-playwright-runner-investigation-opus.md` (uncommitted; the committed path is still `docs/native-playwright-runner-investigation.md`), and Astra's draft is untracked at `.docs/native-playwright-runner-investigation-astra.md`. `.docs/` ships to consumers; `docs/` does not.
 
 ---
 
