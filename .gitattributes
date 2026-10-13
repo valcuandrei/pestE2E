@@ -4,6 +4,7 @@
 /tests                   export-ignore
 /scripts                 export-ignore
 /.github                 export-ignore
+/.vscode                 export-ignore
 /.php-cs-fixer.dist.php  export-ignore
 *:Zone.Identifier        export-ignore
 .editorconfig            export-ignore
@@ -11,6 +12,7 @@
 .gitignore               export-ignore
 phpstan.neon             export-ignore
 phpunit.xml              export-ignore
+rector.php               export-ignore
 CHANGELOG.md             export-ignore
 CONTRIBUTING.md          export-ignore
 README.md                export-ignore
