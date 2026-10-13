@@ -20,7 +20,7 @@ declare(strict_types=1);
  * fallback Laravel routing path. The new guard rejects URI-level `..`
  * traversal before file resolution and no longer inspects realpath.
  */
-function startRouterServer(string $publicPath): array
+function startRouterServer(string $publicPath, ?string $variablesOrder = null): array
 {
     $router = dirname(__DIR__, 2).'/resources/server-router.php';
 
@@ -36,7 +36,7 @@ function startRouterServer(string $publicPath): array
     ];
     $env = array_replace($_ENV, ['PEST_E2E_PUBLIC_PATH' => $publicPath]);
     $proc = proc_open(
-        ['php', '-S', "127.0.0.1:{$port}", '-t', $publicPath, $router],
+        ['php', ...($variablesOrder === null ? [] : ['-d', "variables_order={$variablesOrder}"]), '-S', "127.0.0.1:{$port}", '-t', $publicPath, $router],
         $descriptors,
         $pipes,
         $publicPath,
@@ -178,6 +178,33 @@ function rrmdir(string $dir): void
     }
     @rmdir($dir);
 }
+
+/**
+ * php.ini-development and php.ini-production both ship `variables_order =
+ * "GPCS"`, under which $_ENV is empty. The router used to read the public
+ * path from $_ENV alone and answered 500 to every request on such a PHP.
+ */
+it('finds the public path whatever variables_order the server PHP uses', function (string $variablesOrder): void {
+    $layout = makeLaravelLikeLayout();
+
+    try {
+        $server = startRouterServer($layout['public'], $variablesOrder);
+
+        try {
+            $asset = httpGet($server['port'], '/regular.png');
+            $route = httpGet($server['port'], '/some/route');
+
+            expect($asset['status'])->toBe(200)
+                ->and($asset['contentType'])->toContain('image/png')
+                ->and($route['status'])->toBe(200)
+                ->and($route['body'])->toBe('ROUTED_TO_LARAVEL:/some/route');
+        } finally {
+            stopRouterServer($server);
+        }
+    } finally {
+        rrmdir($layout['root']);
+    }
+})->with(['GPCS', 'EGPCS']);
 
 it('serves a regular public/*.png as a static asset (direct hit under publicPath)', function (): void {
     $layout = makeLaravelLikeLayout();

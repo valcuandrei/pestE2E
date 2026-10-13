@@ -5,7 +5,10 @@
  * Bundled with the package — no app modification required.
  * Serves static files with correct MIME types; otherwise delegates to Laravel.
  */
-$publicPath = $_ENV['PEST_E2E_PUBLIC_PATH'] ?? '';
+// php.ini's stock `variables_order = "GPCS"` leaves $_ENV empty, so the
+// environment the runner passes is read from wherever PHP exposes it.
+$publicPath = $_ENV['PEST_E2E_PUBLIC_PATH'] ?? $_SERVER['PEST_E2E_PUBLIC_PATH'] ?? getenv('PEST_E2E_PUBLIC_PATH');
+$publicPath = is_string($publicPath) ? $publicPath : '';
 if ($publicPath === '' || ! is_dir($publicPath)) {
     http_response_code(500);
     echo 'PEST_E2E_PUBLIC_PATH not set or invalid.';
