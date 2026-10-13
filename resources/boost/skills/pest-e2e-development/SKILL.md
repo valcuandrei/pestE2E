@@ -44,7 +44,7 @@ Key `config/pest-e2e.php` sections:
 
 - **`bindings`** — `JsWorkerContract` and `JsonParserContract` (default Playwright worker + parser).
 - **`auth`** — route, TTL, header, `route_enabled`.
-- **`server`**, **`js_runner`**, **`package_manager`**, **`timing`** — see published config file for env keys.
+- **`server`**, **`js_runner`**, **`package_manager`**, **`timing`**, **`node_compile_cache`** — see published config file for env keys.
 
 CLI overrides: **`--browse`** / **`--headed`**, **`--debug`**, **`--run-using=npm|yarn|pnpm|bun`**, **`--pest-e2e-agent-output`** / **`--pest-e2e-json`**.
 

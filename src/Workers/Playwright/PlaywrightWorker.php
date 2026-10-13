@@ -10,6 +10,7 @@ use ValcuAndrei\PestE2E\Contracts\JsWorkerContract;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessResultDTO;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
+use ValcuAndrei\PestE2E\Support\NodeCompileCache;
 use ValcuAndrei\PestE2E\Support\ParallelWorkerContext;
 use ValcuAndrei\PestE2E\Support\ProcessEnvironment;
 
@@ -17,6 +18,7 @@ final class PlaywrightWorker implements JsWorkerContract
 {
     public function __construct(
         private readonly JsPackageManager $jsPackageManager,
+        private readonly ?NodeCompileCache $nodeCompileCache = null,
     ) {}
 
     /**
@@ -27,7 +29,10 @@ final class PlaywrightWorker implements JsWorkerContract
         $start = microtime(true);
 
         $workingDir = $plan->command->workingDirectory;
-        $env = $plan->command->getMergedEnv();
+        // Environment only: lets supported Node versions reuse compiled
+        // Playwright modules between invocations. The command line below is
+        // built without reference to it.
+        $env = ($this->nodeCompileCache ?? new NodeCompileCache)->apply($plan->command->getMergedEnv(), $workingDir);
         $args = $this->playwrightTestArgs($plan);
 
         $localPath = $this->jsPackageManager->getLocalBinPath('playwright')

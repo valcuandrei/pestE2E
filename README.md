@@ -515,6 +515,53 @@ Each marker is a JSON payload with:
 
 ---
 
+## Node Compile Cache
+
+pestE2E runs your specs with the real Playwright Test CLI, one fresh `playwright test` process per run. That keeps every native feature and every run isolated, and it means each run loads Playwright's own JavaScript again, in the CLI process and in the worker it starts.
+
+On Node 22.1 and newer, pestE2E lets Node reuse the compiled form of those modules between runs by setting `NODE_COMPILE_CACHE` for the Playwright process. Nothing else about the launch changes: same command, same arguments, same process model, same results.
+
+**Defaults**
+
+- Enabled automatically when the `node` on your `PATH` is 22.1 or newer.
+- On older Node versions the variable is not set and Playwright starts exactly as before.
+
+**Precedence**
+
+1. A `NODE_COMPILE_CACHE` you define yourself always wins and is never changed. That applies to a value in your shell or `.env.testing` and to one passed with `->env([...])` on a target. The same goes for `NODE_DISABLE_COMPILE_CACHE`.
+2. Otherwise `node_compile_cache.enabled` decides whether pestE2E sets one.
+
+To turn the automatic behaviour off:
+
+```dotenv
+PEST_E2E_NODE_COMPILE_CACHE=false
+```
+
+Turning it off never removes or overrides a `NODE_COMPILE_CACHE` you set yourself.
+
+**Location and lifecycle**
+
+- The cache lives in `<system temp dir>/pest-e2e-node-compile-cache-<uid>-<project hash>`. The hash comes from the real path of the project root, so every Pest parallel worker of a project shares one cache and unrelated projects never do.
+- The directory is created once with owner-only permissions. pestE2E does not use a directory that is a symlink, belongs to another user, or is writable by others; in that case it prints one line to `stderr` and runs without the cache.
+- Node manages the contents and keeps a separate subdirectory per Node version. Nothing is pruned per test. It is safe to delete the directory at any time; it is rebuilt on the next run.
+- The cache is an optimisation only. Node ignores a cache directory it cannot use, and a run never fails because of it.
+
+**What to expect**
+
+The saving is a fixed amount of Node start-up work per run, so how much it matters depends on everything else a run does. These are measurements from one project, not guarantees:
+
+| Conditions (Node 24.16, Playwright 1.63, 12 logical CPUs) | Cache off | Cache on |
+| --- | --- | --- |
+| Isolated spec, no application: process start to first test callback | 1.61 s | 1.35 s |
+| 17 real browser tests, serial: Playwright start to first test start (median of 51 runs) | 7.00 s | 6.77 s |
+| Same tests, serial: whole Playwright process (median of 51) | 9.34 s | 8.95 s |
+| Same tests, 4 parallel Pest workers: Playwright start to first test start (median of 51) | 10.35 s | 9.60 s |
+| Same tests, 4 parallel Pest workers: whole Playwright process (median of 51) | 14.26 s | 13.10 s |
+
+The cache directory for that project was about 2 MB. Memory use of the Playwright process was unchanged.
+
+---
+
 ## Headed Mode in Sail
 
 If you run Pest inside Laravel Sail on Windows WSL2 and want headed browser mode, forward WSLg into the container by adding this to your `laravel.test` service:
@@ -605,8 +652,8 @@ Key config keys in `config/pest-e2e.php`:
 | `reports.prune.keep_runs` | Number of most recent marked runs to keep. Default: `50` |
 | `reports.prune.keep_days` | Age window for marked runs to keep. Default: `7` |
 | `timing.enabled` | Enable timing instrumentation. Default: `false`, set via `PEST_E2E_TIMING` |
+| `node_compile_cache.enabled` | Let pestE2E point Node's module compile cache at a per-project temp directory (Node 22.1+). Default: `true`, set via `PEST_E2E_NODE_COMPILE_CACHE` |
 | `js_runner.driver` | JS runner. Default: `playwright` |
-| `js_runner.mode` | Runner mode: `cold` or `warm`. Default: `cold` |
 | `package_manager` | Package manager for E2E runs: `npm`, `yarn`, `pnpm`, or `bun` |
 | `parallel.base_port` | Deprecated alias for `server.port` |
 | `agent_output` | Force agent JSON output. Default: from `PEST_E2E_AGENT_OUTPUT` / `PAO_FORCE` |

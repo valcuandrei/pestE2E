@@ -93,9 +93,18 @@ return [
     'timing' => [
         'enabled' => env('PEST_E2E_TIMING', false),
     ],
+    // Node's module compile cache for the Playwright process (Node 22.1+).
+    // When enabled, pest-e2e sets NODE_COMPILE_CACHE to a per-user,
+    // per-project directory under the system temp directory so each
+    // `playwright test` invocation reuses already-compiled Playwright
+    // modules. A NODE_COMPILE_CACHE (or NODE_DISABLE_COMPILE_CACHE) value
+    // you define yourself is never changed, whatever this is set to; older
+    // Node versions are launched exactly as before.
+    'node_compile_cache' => [
+        'enabled' => env('PEST_E2E_NODE_COMPILE_CACHE', true),
+    ],
     'js_runner' => [
         'driver' => env('PEST_E2E_JS_RUNNER_DRIVER', 'playwright'),
-        'mode' => env('PEST_E2E_JS_RUNNER_MODE', 'cold'),
     ],
     'package_manager' => env('PEST_E2E_PACKAGE_MANAGER', null),
     'agent_output' => env('PEST_E2E_AGENT_OUTPUT', env('PAO_FORCE', false)),
