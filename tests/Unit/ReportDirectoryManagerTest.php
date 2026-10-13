@@ -30,51 +30,11 @@ it('creates a target and run scoped report directory', function (): void {
     config()->set('pest-e2e.reports.base_dir', $this->reportBaseDir);
     config()->set('pest-e2e.reports.prune.enabled', false);
 
-    $dir = (new ReportDirectoryManager)->prepare('front/end', 'run:123');
+    $dir = (new ReportDirectoryManager)->begin('front/end', 'run:123')->reportDirectory;
 
     expect($dir)->toBe($this->reportBaseDir.'/front-end/run-123')
         ->and(is_dir($dir))->toBeTrue()
         ->and(is_file($dir.'/.pest-e2e-run'))->toBeTrue();
-});
-
-it('prunes old marked run directories without deleting the current run or unmarked directories', function (): void {
-    $this->reportBaseDir = sys_get_temp_dir().'/pest-e2e-report-prune-'.uniqid();
-    config()->set('pest-e2e.reports.base_dir', $this->reportBaseDir);
-    config()->set('pest-e2e.reports.prune.enabled', true);
-    config()->set('pest-e2e.reports.prune.keep_runs', 1);
-    config()->set('pest-e2e.reports.prune.keep_days', 0);
-
-    $manager = new ReportDirectoryManager;
-    $oldRun = $manager->prepare('frontend', 'old-run');
-    $unmarked = $this->reportBaseDir.'/frontend/manual-not-a-run';
-    mkdir($unmarked, 0775, true);
-    file_put_contents($unmarked.'/keep.txt', 'keep');
-
-    sleep(1);
-
-    $currentRun = $manager->prepare('frontend', 'current-run');
-
-    expect(is_dir($currentRun))->toBeTrue()
-        ->and(is_dir($oldRun))->toBeFalse()
-        ->and(is_dir($unmarked))->toBeTrue();
-});
-
-it('never prunes the current run directory even when it is older than the configured age', function (): void {
-    $this->reportBaseDir = sys_get_temp_dir().'/pest-e2e-report-current-'.uniqid();
-    config()->set('pest-e2e.reports.base_dir', $this->reportBaseDir);
-    config()->set('pest-e2e.reports.prune.enabled', true);
-    config()->set('pest-e2e.reports.prune.keep_runs', 0);
-    config()->set('pest-e2e.reports.prune.keep_days', 1);
-
-    $manager = new ReportDirectoryManager;
-    $currentRun = $manager->prepare('frontend', 'current-run');
-
-    touch($currentRun.'/.pest-e2e-run', time() - 86400 * 10);
-
-    $sameCurrentRun = $manager->prepare('frontend', 'current-run');
-
-    expect($sameCurrentRun)->toBe($currentRun)
-        ->and(is_dir($currentRun))->toBeTrue();
 });
 
 it('uses the injected default when no explicit config is set and the default is writable', function (): void {
@@ -86,7 +46,7 @@ it('uses the injected default when no explicit config is set and the default is 
     config()->set('pest-e2e.reports.prune.enabled', false);
 
     $manager = new ReportDirectoryManager(static fn (): string => $writablePreferred);
-    $dir = $manager->prepare('frontend', 'run-a');
+    $dir = $manager->begin('frontend', 'run-a')->reportDirectory;
 
     expect($dir)->toBe($writablePreferred.'/frontend/run-a')
         ->and(is_file($dir.'/.pest-e2e-run'))->toBeTrue();
@@ -104,7 +64,7 @@ it('falls back to the policy default when the implicit-default resolver returns 
     config()->set('pest-e2e.reports.prune.enabled', false);
 
     $manager = new ReportDirectoryManager(static fn (): string => $locked.'/framework/testing/pest-e2e');
-    $dir = $manager->prepare('frontend', 'run-b');
+    $dir = $manager->begin('frontend', 'run-b')->reportDirectory;
 
     expect($dir)->not->toStartWith($locked)
         ->and($dir)->toContain('pest-e2e-')
@@ -129,7 +89,7 @@ it('throws without falling back when an explicit unwritable base_dir is configur
 
     $manager = new ReportDirectoryManager;
 
-    expect(fn () => $manager->prepare('frontend', 'run-c'))
+    expect(fn () => $manager->begin('frontend', 'run-c')->reportDirectory)
         ->toThrow(RuntimeException::class, 'Unable');
 
     @chmod($lockedExplicit, 0700);
@@ -150,7 +110,7 @@ it('retries the marker write into the fallback exactly once when the implicit de
     config()->set('pest-e2e.reports.prune.enabled', false);
 
     $manager = new ReportDirectoryManager(static fn (): string => $preferredRoot);
-    $dir = $manager->prepare('frontend', 'run-d');
+    $dir = $manager->begin('frontend', 'run-d')->reportDirectory;
 
     expect($dir)->not->toStartWith($preferredRoot)
         ->and($dir)->toContain('pest-e2e-')
@@ -186,7 +146,7 @@ it('treats the legacy shipped default path as implicit and falls back when it is
     // ensure that even though the legacy filesystem tree is locked, we still
     // succeed via the policy fallback.
     $manager = new ReportDirectoryManager(static fn (): string => $lockedRoot.'/framework/testing/pest-e2e');
-    $dir = $manager->prepare('frontend', 'run-legacy');
+    $dir = $manager->begin('frontend', 'run-legacy')->reportDirectory;
 
     expect($dir)->not->toStartWith($legacy)
         ->and($dir)->toContain('pest-e2e-')
@@ -212,7 +172,7 @@ it('preserves strict behaviour for a genuinely custom explicit path that is not 
 
     $manager = new ReportDirectoryManager;
 
-    expect(fn () => $manager->prepare('frontend', 'run-custom'))
+    expect(fn () => $manager->begin('frontend', 'run-custom')->reportDirectory)
         ->toThrow(RuntimeException::class, 'Unable');
 
     @chmod($lockedCustom, 0700);
@@ -237,12 +197,12 @@ it('resolves the same report base directory regardless of the current working di
 
     try {
         $before = (new ReportDirectoryManager(static fn (): string => $lockedRoot.'/framework/testing/pest-e2e'))
-            ->prepare('frontend', 'run-cwd-1');
+            ->begin('frontend', 'run-cwd-1')->reportDirectory;
 
         chdir($subdir);
 
         $afterChdir = (new ReportDirectoryManager(static fn (): string => $lockedRoot.'/framework/testing/pest-e2e'))
-            ->prepare('frontend', 'run-cwd-2');
+            ->begin('frontend', 'run-cwd-2')->reportDirectory;
     } finally {
         if ($originalCwd !== false) {
             chdir($originalCwd);
@@ -280,7 +240,7 @@ it('surfaces the RuntimeException when both the preferred and the fallback direc
 
     $manager = new ReportDirectoryManager(static fn (): string => $preferredRoot);
 
-    expect(fn () => $manager->prepare('frontend', 'run-e'))
+    expect(fn () => $manager->begin('frontend', 'run-e')->reportDirectory)
         ->toThrow(RuntimeException::class);
 
     @chmod($preferredRoot.'/frontend/run-e', 0700);

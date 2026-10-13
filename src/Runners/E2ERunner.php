@@ -16,12 +16,14 @@ use ValcuAndrei\PestE2E\DTO\JsonReportErrorDTO;
 use ValcuAndrei\PestE2E\DTO\JsonReportTestDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\RunContextDTO;
+use ValcuAndrei\PestE2E\DTO\TargetConfigDTO;
 use ValcuAndrei\PestE2E\Enums\TestStatusType;
 use ValcuAndrei\PestE2E\Readers\JsonReportReader;
 use ValcuAndrei\PestE2E\Registries\TargetRegistry;
 use ValcuAndrei\PestE2E\Support\AdmissionController;
 use ValcuAndrei\PestE2E\Support\AdmissionControllerFactory;
 use ValcuAndrei\PestE2E\Support\ReportDirectoryManager;
+use ValcuAndrei\PestE2E\Support\ReportRun;
 use ValcuAndrei\PestE2E\Support\WarmBrowserManager;
 
 /**
@@ -67,10 +69,42 @@ final class E2ERunner
     ): JsonReportDTO {
         $target = $this->registry->get($targetName);
         $runId ??= $this->runIdGenerator->generate();
-        $resolvedReportDir = $this->reportDirectoryManager->prepare(
-            target: $target->name,
-            runId: $runId,
-        );
+        // Allocates the report directory, registers the run and takes its
+        // active-run lock. Released in `finish()` below, whatever happens.
+        $reportRun = $this->reportDirectoryManager->begin($target->name, $runId);
+        $outcome = 'interrupted';
+
+        try {
+            $report = $this->execute($reportRun, $target, $runId, $env, $params, $options, $testFilter, $specPath, $lateParams);
+            $outcome = $report->hasFailures() ? 'failed' : 'passed';
+
+            return $report;
+        } finally {
+            // Deletes the run's private runtime files (browser storage state
+            // holding session cookies) on success, failure and exception alike.
+            $this->reportDirectoryManager->finish($reportRun, $outcome, $target->dir);
+        }
+    }
+
+    /**
+     * Everything between allocating a run and reading its report.
+     *
+     * @param  array<string,string|null>  $env
+     * @param  array<string,mixed>  $params
+     * @param  (Closure(): array<string, mixed>)|null  $lateParams
+     */
+    private function execute(
+        ReportRun $reportRun,
+        TargetConfigDTO $target,
+        string $runId,
+        array $env,
+        array $params,
+        ?ProcessOptionsDTO $options,
+        ?string $testFilter,
+        ?string $specPath,
+        ?Closure $lateParams,
+    ): JsonReportDTO {
+        $resolvedReportDir = $reportRun->reportDirectory;
         // Adaptive resource admission — gates every heavyweight E2E execution
         // on measured host pressure. `null` decision means the controller is
         // disabled or unavailable; either way, `admit()` blocks (sleeps) until
@@ -101,8 +135,20 @@ final class E2ERunner
             }
         }
 
+        // Where the JS harness keeps files that must not outlive the run or
+        // sit in Playwright's test directory (browser storage state).
+        if ($reportRun->runtimeDirectory !== null) {
+            $envWithWarmBrowser['PEST_E2E_RUNTIME_DIR'] = $reportRun->runtimeDirectory;
+        }
+
+        // Cheap, throttled check; at most one worker per interval sweeps old
+        // runs. Deliberately before the auth ticket is issued, so a sweep can
+        // never eat into the ticket's lifetime.
+        $this->reportDirectoryManager->pruneIfDue($reportRun);
+
         // Everything that can make this run wait (admission queue, warm
-        // browser startup) is behind us; the next step launches the JS runner.
+        // browser startup, pruning) is behind us; the next step launches the
+        // JS runner.
         if ($lateParams instanceof Closure) {
             /** @var array<string, mixed> $params */
             $params = array_replace_recursive($params, $lateParams());

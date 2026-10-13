@@ -8,6 +8,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 use ValcuAndrei\PestE2E\Support\NodeCompileCache;
+use ValcuAndrei\PestE2E\Tests\Support\TemporaryDirectories;
 use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
 
 /*
@@ -109,8 +110,7 @@ beforeEach(function (): void {
     }
 
     NodeCompileCache::resetState();
-    $this->project = sys_get_temp_dir().'/pest-e2e-ncc-native-'.bin2hex(random_bytes(6));
-    mkdir($this->project, 0700, true);
+    $this->project = TemporaryDirectories::create('pest-e2e-ncc-native-');
     symlink($nodeModules, $this->project.'/node_modules');
     $this->cacheDirectory = $this->project.'/compile-cache';
 
@@ -150,8 +150,7 @@ afterEach(function (): void {
     NodeCompileCache::resetState();
 
     if (isset($this->project)) {
-        @unlink($this->project.'/node_modules');
-        exec('rm -rf '.escapeshellarg($this->project));
+        TemporaryDirectories::remove($this->project);
     }
 });
 

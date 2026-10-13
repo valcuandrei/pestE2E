@@ -7,6 +7,7 @@ use ValcuAndrei\PestE2E\DTO\ProcessOptionsDTO;
 use ValcuAndrei\PestE2E\DTO\ProcessPlanDTO;
 use ValcuAndrei\PestE2E\Support\JsPackageManager;
 use ValcuAndrei\PestE2E\Support\NodeCompileCache;
+use ValcuAndrei\PestE2E\Tests\Support\TemporaryDirectories;
 use ValcuAndrei\PestE2E\Workers\Playwright\PlaywrightWorker;
 
 /**
@@ -43,7 +44,7 @@ function fakeCompileCache(?string $nodeVersion, string $directory, array $inheri
 
 beforeEach(function (): void {
     NodeCompileCache::resetState();
-    $this->project = sys_get_temp_dir().'/pest-e2e-ncc-worker-'.bin2hex(random_bytes(6));
+    $this->project = TemporaryDirectories::create('pest-e2e-ncc-worker-');
     mkdir($this->project.'/node_modules/.bin', 0700, true);
 
     $bin = $this->project.'/node_modules/.bin/playwright';
@@ -62,7 +63,7 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     NodeCompileCache::resetState();
-    exec('rm -rf '.escapeshellarg($this->project));
+    TemporaryDirectories::remove($this->project);
 });
 
 it('passes the cache directory to the Playwright process on supported Node runtimes', function (): void {

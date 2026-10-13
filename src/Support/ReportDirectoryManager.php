@@ -4,9 +4,21 @@ declare(strict_types=1);
 
 namespace ValcuAndrei\PestE2E\Support;
 
+use Closure;
 use RuntimeException;
+use Throwable;
+use ValcuAndrei\PestE2E\DTO\ReportPruneOptionsDTO;
 
 /**
+ * Allocates the per-run report directory and drives its lifecycle:
+ *
+ * 1. {@see begin()} creates the directory, registers the run in the sidecar
+ *    registry and takes its active-run lock.
+ * 2. {@see pruneIfDue()} is the cheap check made before every Playwright
+ *    launch; at most once per interval, one worker sweeps old runs.
+ * 3. {@see finish()} deletes the run's private runtime files, records how it
+ *    ended and releases the lock.
+ *
  * @internal
  */
 final class ReportDirectoryManager
@@ -15,18 +27,43 @@ final class ReportDirectoryManager
 
     private const FALLBACK_NAMESPACE = 'pest-e2e';
 
+    private const SWEEP_STAMP_FILE = 'prune.json';
+
+    private const SWEEP_LOCK_FILE = 'prune.lock';
+
+    /**
+     * Run directories one automatic sweep may delete, so a large backlog is
+     * worked off over several sweeps instead of delaying one test.
+     */
+    private const MAX_DELETIONS_PER_SWEEP = 200;
+
+    /** Seconds until the next sweep when the last one stopped at its limit. */
+    private const BACKLOG_INTERVAL_SECONDS = 60;
+
+    /** Directory the JS harness of earlier versions wrote per-run state into, inside the target directory. */
+    private const LEGACY_TARGET_STATE_DIRECTORY = '.pest-e2e';
+
+    private static bool $sweepFailureReported = false;
+
     /** @var (callable():string)|null */
     private $defaultBaseDirResolver;
+
+    private readonly ReportRunRegistry $registry;
+
+    private readonly ReportPruner $pruner;
 
     /**
      * @param  (callable():string)|null  $defaultBaseDirResolver
      *                                                            Test-only seam so unit tests can inject a controlled default path.
      *                                                            Production callers should always pass `null`, which uses the shipped
      *                                                            `storage_path('framework/testing/pest-e2e')` resolver.
+     * @param  (Closure(string): void)|null  $diagnostic  Receives the one-line notice when a sweep cannot run; defaults to STDERR.
      */
-    public function __construct(?callable $defaultBaseDirResolver = null)
+    public function __construct(?callable $defaultBaseDirResolver = null, ?ReportRunRegistry $registry = null, ?ReportPruner $pruner = null, private readonly ?Closure $diagnostic = null)
     {
         $this->defaultBaseDirResolver = $defaultBaseDirResolver;
+        $this->registry = $registry ?? new ReportRunRegistry;
+        $this->pruner = $pruner ?? new ReportPruner($this->registry);
     }
 
     public function resolveRunDirectory(string $target, string $runId): string
@@ -34,13 +71,211 @@ final class ReportDirectoryManager
         return $this->runDirectory($this->baseDir(), $target, $runId);
     }
 
-    public function prepare(string $target, string $runId): string
+    /**
+     * Allocate a run: create its report directory, register it and mark it active.
+     */
+    public function begin(string $target, string $runId): ReportRun
     {
         [$baseDir, $runDir] = $this->prepareRunDirectory($target, $runId);
         [$baseDir, $runDir] = $this->writeRunMarkerWithFallback($baseDir, $runDir, $target, $runId);
-        $this->prune($baseDir, $runDir);
 
-        return $runDir;
+        return $this->registry->open($baseDir, $target, $runId, $this->safeSegment($target), $this->safeSegment($runId), $runDir);
+    }
+
+    /**
+     * The base directory reports are written to, as pruning sees it.
+     */
+    public function baseDirectory(): string
+    {
+        return $this->baseDir();
+    }
+
+    /**
+     * Sweep old runs if a sweep is due and no other worker is doing one.
+     *
+     * Called before every Playwright launch. The usual cost is reading one
+     * small file. It never waits for another process and never throws: a
+     * sweep that cannot run or fails is reported once and retried after the
+     * normal interval.
+     */
+    public function pruneIfDue(ReportRun $current): void
+    {
+        if (! $current->isRegistered()) {
+            return;
+        }
+
+        $stateRoot = ReportRunRegistry::stateRoot($current->baseDirectory);
+        $stampFile = $stateRoot.'/'.self::SWEEP_STAMP_FILE;
+
+        try {
+            if (! $this->sweepIsDue($stampFile, time())) {
+                return;
+            }
+
+            $lock = @fopen($stateRoot.'/'.self::SWEEP_LOCK_FILE, 'c');
+
+            if ($lock === false) {
+                return;
+            }
+
+            if (! @flock($lock, LOCK_EX | LOCK_NB)) {
+                @fclose($lock);
+
+                return;
+            }
+
+            try {
+                $now = time();
+
+                // Another worker may have finished a sweep while this one was
+                // deciding; the stamp is only authoritative under the lock.
+                if (! $this->sweepIsDue($stampFile, $now)) {
+                    return;
+                }
+
+                $stamp = $this->readStamp($stampFile);
+                $stamp['lastAttemptAt'] = $now;
+                $this->writeStamp($stampFile, $stamp);
+
+                $result = $this->pruner->prune($current->baseDirectory, new ReportPruneOptionsDTO(
+                    keepRuns: $this->keepRuns(),
+                    keepDays: $this->keepDays(),
+                    graceSeconds: $this->graceMinutes() * 60,
+                    retention: $this->pruningEnabled(),
+                    maxDeletions: self::MAX_DELETIONS_PER_SWEEP,
+                    protectedReportDirectories: [$current->reportDirectory],
+                    now: $now,
+                ));
+
+                if ($result->skippedReason !== null || $result->failed !== []) {
+                    $this->reportSweepFailure($result->skippedReason ?? 'could not remove '.count($result->failed).' run directories, first: '.$result->failed[0]);
+
+                    return;
+                }
+
+                $this->writeStamp($stampFile, ['lastSuccessAt' => $now, 'lastAttemptAt' => $now, 'backlog' => $result->truncated]);
+            } finally {
+                @flock($lock, LOCK_UN);
+                @fclose($lock);
+            }
+        } catch (Throwable $e) {
+            $this->reportSweepFailure($e->getMessage());
+        }
+    }
+
+    /**
+     * End a run: delete its runtime files, record the outcome, release its lock.
+     *
+     * @param  string  $state  How the run ended (`passed`, `failed`, `interrupted`).
+     * @param  string|null  $targetDirectory  The target's working directory, to clear per-run state an older published JS harness wrote there.
+     */
+    public function finish(ReportRun $run, string $state, ?string $targetDirectory = null): void
+    {
+        try {
+            $this->registry->close($run, $state);
+
+            if ($targetDirectory !== null) {
+                $this->removeLegacyTargetState($targetDirectory, $run->runId);
+            }
+        } catch (Throwable) {
+            // Cleanup must never turn a finished run into a failure.
+        }
+    }
+
+    /**
+     * Test hook: forget that a sweep failure was already reported.
+     *
+     * @internal
+     */
+    public static function resetState(): void
+    {
+        self::$sweepFailureReported = false;
+    }
+
+    private function sweepIsDue(string $stampFile, int $now): bool
+    {
+        $stamp = $this->readStamp($stampFile);
+        $last = max($stamp['lastSuccessAt'], $stamp['lastAttemptAt']);
+        $interval = $this->intervalMinutes() * 60;
+
+        if ($stamp['backlog'] && $stamp['lastSuccessAt'] === $last) {
+            $interval = min($interval, self::BACKLOG_INTERVAL_SECONDS);
+        }
+
+        return $now - $last >= $interval;
+    }
+
+    /**
+     * @return array{lastSuccessAt: int, lastAttemptAt: int, backlog: bool}
+     */
+    private function readStamp(string $stampFile): array
+    {
+        $stamp = ['lastSuccessAt' => 0, 'lastAttemptAt' => 0, 'backlog' => false];
+        $raw = is_file($stampFile) ? @file_get_contents($stampFile) : false;
+        $decoded = is_string($raw) ? json_decode($raw, true) : null;
+
+        if (is_array($decoded)) {
+            $stamp['lastSuccessAt'] = is_int($decoded['lastSuccessAt'] ?? null) ? $decoded['lastSuccessAt'] : 0;
+            $stamp['lastAttemptAt'] = is_int($decoded['lastAttemptAt'] ?? null) ? $decoded['lastAttemptAt'] : 0;
+            $stamp['backlog'] = ($decoded['backlog'] ?? false) === true;
+        }
+
+        return $stamp;
+    }
+
+    /**
+     * @param  array{lastSuccessAt: int, lastAttemptAt: int, backlog: bool}  $stamp
+     */
+    private function writeStamp(string $stampFile, array $stamp): void
+    {
+        @file_put_contents($stampFile, json_encode($stamp, JSON_THROW_ON_ERROR), LOCK_EX);
+    }
+
+    private function reportSweepFailure(string $reason): void
+    {
+        if (self::$sweepFailureReported) {
+            return;
+        }
+
+        self::$sweepFailureReported = true;
+
+        $message = "pest-e2e: report pruning skipped — {$reason}. Tests are unaffected; it will be retried later.";
+
+        if ($this->diagnostic instanceof Closure) {
+            ($this->diagnostic)($message);
+
+            return;
+        }
+
+        fwrite(STDERR, "\n{$message}\n");
+    }
+
+    /**
+     * Remove `<target dir>/.pest-e2e/<runId>/storageState.json` left by an older published harness.
+     *
+     * Only that one file is deleted, then the run's directory if it is empty.
+     * Anything else found there is left alone.
+     */
+    private function removeLegacyTargetState(string $targetDirectory, string $runId): void
+    {
+        if (preg_match('/^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/', $runId) !== 1) {
+            return;
+        }
+
+        $stateRoot = rtrim($targetDirectory, '/').'/'.self::LEGACY_TARGET_STATE_DIRECTORY;
+        $runDirectory = $stateRoot.'/'.$runId;
+
+        if (is_link($stateRoot) || is_link($runDirectory) || ! is_dir($runDirectory)) {
+            return;
+        }
+
+        $storageState = $runDirectory.'/storageState.json';
+
+        if (is_file($storageState) && ! is_link($storageState)) {
+            @unlink($storageState);
+        }
+
+        @rmdir($runDirectory);
     }
 
     private function baseDir(): string
@@ -87,7 +322,7 @@ final class ReportDirectoryManager
 
         try {
             $legacy = storage_path('framework/testing/pest-e2e');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
 
@@ -194,37 +429,6 @@ final class ReportDirectoryManager
         ], JSON_THROW_ON_ERROR);
     }
 
-    private function prune(string $baseDir, string $currentRunDir): void
-    {
-        if (! $this->pruningEnabled()) {
-            return;
-        }
-
-        $runs = $this->markedRunDirectories($baseDir);
-        $currentRunDir = $this->normalizePath($currentRunDir);
-        $keepRuns = $this->keepRuns();
-        $keepDays = $this->keepDays();
-        $oldestAllowed = $keepDays > 0 ? time() - ($keepDays * 86400) : null;
-
-        usort(
-            $runs,
-            static fn (array $left, array $right): int => $right['mtime'] <=> $left['mtime']
-        );
-
-        foreach ($runs as $index => $run) {
-            if ($run['path'] === $currentRunDir) {
-                continue;
-            }
-
-            $tooManyRuns = $keepRuns > 0 && $index >= $keepRuns;
-            $tooOld = $oldestAllowed !== null && $run['mtime'] < $oldestAllowed;
-
-            if ($tooManyRuns || $tooOld) {
-                $this->deleteDirectory($run['path']);
-            }
-        }
-    }
-
     private function pruningEnabled(): bool
     {
         if (! function_exists('config')) {
@@ -236,7 +440,7 @@ final class ReportDirectoryManager
 
     private function keepRuns(): int
     {
-        $value = function_exists('config') ? config('pest-e2e.reports.prune.keep_runs', 50) : 50;
+        $value = function_exists('config') ? config('pest-e2e.reports.prune.keep_runs', 500) : 500;
 
         if (is_int($value)) {
             return max(0, $value);
@@ -246,7 +450,7 @@ final class ReportDirectoryManager
             return max(0, (int) $value);
         }
 
-        return 50;
+        return 500;
     }
 
     private function keepDays(): int
@@ -264,70 +468,28 @@ final class ReportDirectoryManager
         return 7;
     }
 
-    /**
-     * @return list<array{path:string, mtime:int}>
-     */
-    private function markedRunDirectories(string $baseDir): array
+    private function graceMinutes(): int
     {
-        if (! is_dir($baseDir)) {
-            return [];
-        }
-
-        $runs = [];
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($baseDir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
-
-        foreach ($iterator as $file) {
-            if (! $file instanceof \SplFileInfo) {
-                continue;
-            }
-
-            if (! $file->isDir()) {
-                continue;
-            }
-
-            $path = $this->normalizePath($file->getPathname());
-            $marker = $path.'/'.self::RUN_MARKER;
-
-            if (is_file($marker)) {
-                $runs[] = [
-                    'path' => $path,
-                    'mtime' => (filemtime($marker) ?: filemtime($path)) ?: 0,
-                ];
-            }
-        }
-
-        return $runs;
+        return $this->nonNegativeInt('pest-e2e.reports.prune.grace_minutes', 60);
     }
 
-    private function normalizePath(string $path): string
+    private function intervalMinutes(): int
     {
-        return rtrim($path, '/');
+        return $this->nonNegativeInt('pest-e2e.reports.prune.interval_minutes', 15);
     }
 
-    private function deleteDirectory(string $dir): void
+    private function nonNegativeInt(string $key, int $default): int
     {
-        if (! is_dir($dir)) {
-            return;
+        $value = function_exists('config') ? config($key, $default) : $default;
+
+        if (is_int($value)) {
+            return max(0, $value);
         }
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($iterator as $file) {
-            if (! $file instanceof \SplFileInfo) {
-                continue;
-            }
-
-            $path = $file->getPathname();
-
-            $file->isDir() ? @rmdir($path) : @unlink($path);
+        if (is_string($value) && is_numeric($value)) {
+            return max(0, (int) $value);
         }
 
-        @rmdir($dir);
+        return $default;
     }
 }

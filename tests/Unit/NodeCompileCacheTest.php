@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use ValcuAndrei\PestE2E\Support\NodeCompileCache;
 use ValcuAndrei\PestE2E\Support\ReportPathPolicy;
+use ValcuAndrei\PestE2E\Tests\Support\TemporaryDirectories;
 
 /**
  * Build a NodeCompileCache whose surroundings are fully controlled by the test.
@@ -23,33 +24,9 @@ function compileCache(?string $nodeVersion, ?string $directory, array $inherited
     );
 }
 
-function removeCompileCacheDirectory(string $path): void
-{
-    if (is_link($path) || is_file($path)) {
-        @unlink($path);
-
-        return;
-    }
-
-    if (! is_dir($path)) {
-        return;
-    }
-
-    @chmod($path, 0700);
-
-    foreach (scandir($path) ?: [] as $entry) {
-        if ($entry !== '.' && $entry !== '..') {
-            removeCompileCacheDirectory($path.DIRECTORY_SEPARATOR.$entry);
-        }
-    }
-
-    @rmdir($path);
-}
-
 beforeEach(function (): void {
     NodeCompileCache::resetState();
-    $this->scratch = sys_get_temp_dir().'/pest-e2e-ncc-test-'.bin2hex(random_bytes(6));
-    mkdir($this->scratch, 0700, true);
+    $this->scratch = TemporaryDirectories::create('pest-e2e-ncc-test-');
     $this->cacheDirectory = $this->scratch.'/cache';
     $this->originalBasePath = app()->basePath();
     $this->originalTestToken = $_SERVER['TEST_TOKEN'] ?? null;
@@ -57,8 +34,10 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     NodeCompileCache::resetState();
-    removeCompileCacheDirectory($this->scratch);
+    // Restore the real application path first: cleanup refuses to run while
+    // the application's report directory resolves inside the fixture.
     app()->setBasePath($this->originalBasePath);
+    TemporaryDirectories::remove($this->scratch);
 
     if ($this->originalTestToken === null) {
         unset($_SERVER['TEST_TOKEN']);

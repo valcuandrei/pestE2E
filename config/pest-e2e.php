@@ -45,10 +45,20 @@ return [
         // consumer's config: it will be used as-is, and no automatic fallback
         // will be applied if that directory turns out not to be writable.
         'base_dir' => env('PEST_E2E_REPORTS_BASE_DIR'),
+        // Old run directories are removed automatically. Before every
+        // Playwright launch pest-e2e checks whether a sweep is due; at most
+        // once per `interval_minutes` one worker performs it, the others
+        // carry on. Only runs pest-e2e can prove it created are deleted, and
+        // never one that is active or younger than `grace_minutes`.
+        //
+        // A run is deleted when it is older than `keep_days` OR is not among
+        // the newest `keep_runs` runs. Set either to 0 to turn that rule off.
         'prune' => [
             'enabled' => env('PEST_E2E_REPORT_PRUNE_ENABLED', true),
-            'keep_runs' => (int) env('PEST_E2E_REPORT_PRUNE_KEEP_RUNS', 50),
+            'keep_runs' => (int) env('PEST_E2E_REPORT_PRUNE_KEEP_RUNS', 500),
             'keep_days' => (int) env('PEST_E2E_REPORT_PRUNE_KEEP_DAYS', 7),
+            'grace_minutes' => (int) env('PEST_E2E_REPORT_PRUNE_GRACE_MINUTES', 60),
+            'interval_minutes' => (int) env('PEST_E2E_REPORT_PRUNE_INTERVAL_MINUTES', 15),
         ],
     ],
     // Adaptive resource-based admission controller. Gates heavyweight
