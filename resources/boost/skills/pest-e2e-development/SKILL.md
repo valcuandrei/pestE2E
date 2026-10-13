@@ -22,7 +22,7 @@ Laravel-first orchestration: **Pest calls into Node**; **Playwright (or another 
 | Playwright tests | Directory passed to `->dir()` (default stub: `resources/js/e2e`) |
 | Harness | `resources/js/pest-e2e/core.mjs`, `playwright.mjs` |
 | Config | `config/pest-e2e.php` |
-| Contracts / API | Package `.docs/CONTRACTS.md`, `.docs/API.md` |
+| Contracts / API | Package repository `.docs/CONTRACTS.md`, `.docs/API.md` (not in Composer dist archives) |
 
 ## Environment injected into the JS process
 

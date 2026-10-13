@@ -3,7 +3,7 @@
 - pestE2E runs **JavaScript-owned** browser tests (Playwright by default) from **Pest**. Laravel supplies intent, data, and auth; the JS runner owns the browser. **Never** introduce a PHP browser DSL (`visit()`, `click()`, `fill()`, etc.) for E2E flows handled by this package.
 - Register `e2e()->target(...)` in the **base E2E test case** `setUp()` (for example `tests/E2ETestCase.php`), not inside individual test bodies or static one-time blocks — the container is refreshed between tests and targets must be re-registered each time.
 - Parallel E2E (`php artisan test --parallel`) requires **per-worker databases** (`{database}_test_{TEST_TOKEN}` via Laravel parallel testing). pestE2E isolates ports, auth tickets, and `APP_URL` per worker automatically.
-- Use `search-docs` for Laravel, Pest, PHPUnit, and Playwright topics. For package-specific contracts and the public PHP API, read **`CONTRACTS.md`** and **`API.md`** inside the installed package (`.docs/` directory relative to the package root).
+- Use `search-docs` for Laravel, Pest, PHPUnit, and Playwright topics. For package-specific contracts and the public PHP API, read **`CONTRACTS.md`** and **`API.md`** in the `.docs/` directory of the package repository (present in source checkouts and path-repository installs; not part of Composer dist archives).
 - **IMPORTANT:** Activate the **`pest-e2e-development`** skill when adding or changing E2E tests, Playwright specs, `e2e()` targets, `actingAs()` / auth tickets, CSRF exclusions for the auth route, `config/pest-e2e.php`, or files under `resources/js/pest-e2e/`.
 
 ## Playwright timeouts (hard rule)
