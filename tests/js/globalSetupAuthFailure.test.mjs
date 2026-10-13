@@ -27,7 +27,7 @@ import { createServer } from 'node:http';
  * are supplied via a temp PEST_E2E_PARAMS payload so no PHP is needed.
  */
 
-const { globalSetup } = await import('../../resources/js/pest-e2e/playwright.mjs');
+const { globalSetup, storageStatePath: resolveStorageStatePath } = await import('../../resources/js/pest-e2e/playwright.mjs');
 
 /** @returns {Promise<{server: import('http').Server, url: string}>} */
 function startServer(handler) {
@@ -84,10 +84,11 @@ test('globalSetup throws on 401 and does not write a storage-state file', async 
     const runId = 'auth-401-'+Date.now();
     setEnvForTest({ appUrl: url, runId });
 
-    // globalSetup writes to `<cwd>/.pest-e2e/<runId>/storageState.json`.
+    // globalSetup writes to `<PEST_E2E_RUNTIME_DIR>/storageState.json`.
     // Point cwd at a scratch dir so we can inspect the write-or-not outcome.
     const originalCwd = process.cwd();
     process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
 
     let thrown = null;
     try {
@@ -104,7 +105,7 @@ test('globalSetup throws on 401 and does not write a storage-state file', async 
     assert.match(thrown.message, /invalid or expired/);
 
     // Must NOT write a storage-state file on failure.
-    const storageStatePath = join(runDir, '.pest-e2e', runId, 'storageState.json');
+    const storageStatePath = join(runDir, 'runtime', 'storageState.json');
     assert.equal(existsSync(storageStatePath), false, 'storageState.json must NOT be written on auth failure');
 
     rmSync(runDir, { recursive: true, force: true });
@@ -123,6 +124,7 @@ test('globalSetup throws on 500 without silently invoking the browser fallback',
 
     const originalCwd = process.cwd();
     process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
 
     let thrown = null;
     try {
@@ -183,6 +185,7 @@ test('globalSetup writes a storage-state file with cookies on a 302 session redi
 
     const originalCwd = process.cwd();
     process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
 
     try {
         await globalSetup();
@@ -190,7 +193,7 @@ test('globalSetup writes a storage-state file with cookies on a 302 session redi
         process.chdir(originalCwd);
     }
 
-    const storageStatePath = join(runDir, '.pest-e2e', runId, 'storageState.json');
+    const storageStatePath = join(runDir, 'runtime', 'storageState.json');
     assert.equal(existsSync(storageStatePath), true);
     const state = JSON.parse(readFileSync(storageStatePath, 'utf8'));
 
@@ -238,6 +241,7 @@ test('globalSetup does NOT touch @playwright/test on the 302 success path (brows
 
     const originalCwd = process.cwd();
     process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
 
     try {
         await globalSetup();
@@ -245,7 +249,7 @@ test('globalSetup does NOT touch @playwright/test on the 302 success path (brows
         process.chdir(originalCwd);
     }
 
-    const state = JSON.parse(readFileSync(join(runDir, '.pest-e2e', runId, 'storageState.json'), 'utf8'));
+    const state = JSON.parse(readFileSync(join(runDir, 'runtime', 'storageState.json'), 'utf8'));
     assert.equal(state.cookies.length, 1);
     assert.equal(state.cookies[0].value, 'proof-of-fetch');
     assert.deepEqual(state.origins, [], 'no browser ran, origins must be []');
@@ -271,6 +275,7 @@ test('globalSetup succeeds on a 200 response with valid Set-Cookie', async (t) =
 
     const originalCwd = process.cwd();
     process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
 
     try {
         await globalSetup();
@@ -278,7 +283,7 @@ test('globalSetup succeeds on a 200 response with valid Set-Cookie', async (t) =
         process.chdir(originalCwd);
     }
 
-    const state = JSON.parse(readFileSync(join(runDir, '.pest-e2e', runId, 'storageState.json'), 'utf8'));
+    const state = JSON.parse(readFileSync(join(runDir, 'runtime', 'storageState.json'), 'utf8'));
     assert.equal(state.cookies.length, 1);
     assert.equal(state.cookies[0].name, 'laravel_session');
     assert.equal(process.env.PEST_E2E_AUTH_STRATEGY, 'fetch');
@@ -295,6 +300,7 @@ test('globalSetup surfaces network / connection failures as thrown errors', asyn
 
     const originalCwd = process.cwd();
     process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
 
     let thrown = null;
     try {
@@ -308,8 +314,72 @@ test('globalSetup surfaces network / connection failures as thrown errors', asyn
 
     assert.ok(thrown instanceof Error, 'connection refused must throw');
     // storage-state must not have been written
-    const storageStatePath = join(runDir, '.pest-e2e', runId, 'storageState.json');
+    const storageStatePath = join(runDir, 'runtime', 'storageState.json');
     assert.equal(existsSync(storageStatePath), false);
 
     rmSync(runDir, { recursive: true, force: true });
+});
+
+test('storage state is written to the per-run runtime directory, never under the working directory', async () => {
+    const { server, url } = await startServer((req, res) => {
+        res.writeHead(302, { 'Set-Cookie': 'laravel_session=abc; Path=/; HttpOnly', Location: '/dashboard' });
+        res.end();
+    });
+
+    const runDir = makeTempDir();
+    const runId = 'runtime-dir-case';
+    setEnvForTest({ appUrl: url, runId });
+    const originalCwd = process.cwd();
+    process.chdir(runDir);
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'state', 'frontend', runId, 'runtime');
+
+    try {
+        await globalSetup({});
+
+        assert.equal(resolveStorageStatePath(), join(runDir, 'state', 'frontend', runId, 'runtime', 'storageState.json'));
+        assert.equal(existsSync(resolveStorageStatePath()), true);
+        assert.equal(process.env.PEST_E2E_STORAGE_STATE, resolveStorageStatePath());
+        // The working directory is Playwright's testDir in a real run: nothing may be created there.
+        assert.equal(existsSync(join(runDir, '.pest-e2e')), false);
+    } finally {
+        process.chdir(originalCwd);
+        server.close();
+        rmSync(runDir, { recursive: true, force: true });
+    }
+});
+
+test('an unauthenticated run writes an empty storage state into the runtime directory', async () => {
+    const runDir = makeTempDir();
+    const originalCwd = process.cwd();
+    process.chdir(runDir);
+    process.env.APP_URL = 'http://127.0.0.1:1';
+    process.env.PEST_E2E_RUN_ID = 'unauthenticated-case';
+    process.env.PEST_E2E_PARAMS = JSON.stringify({ target: 'frontend', runId: 'unauthenticated-case', params: { baseUrl: 'http://127.0.0.1:1' } });
+    process.env.PEST_E2E_RUNTIME_DIR = join(runDir, 'runtime');
+
+    try {
+        await globalSetup({});
+
+        assert.deepEqual(JSON.parse(readFileSync(join(runDir, 'runtime', 'storageState.json'), 'utf8')), { cookies: [], origins: [] });
+        assert.equal(existsSync(join(runDir, '.pest-e2e')), false);
+    } finally {
+        process.chdir(originalCwd);
+        rmSync(runDir, { recursive: true, force: true });
+    }
+});
+
+test('without pest-e2e the storage state falls back to a per-user temp directory outside the working directory', () => {
+    const original = process.env.PEST_E2E_RUNTIME_DIR;
+    delete process.env.PEST_E2E_RUNTIME_DIR;
+    process.env.PEST_E2E_RUN_ID = 'manual-case';
+
+    try {
+        const resolved = resolveStorageStatePath();
+
+        assert.equal(resolved.startsWith(tmpdir()), true);
+        assert.equal(resolved.endsWith(join('manual-case', 'storageState.json')), true);
+        assert.equal(resolved.includes('.pest-e2e'), false);
+    } finally {
+        if (original !== undefined) process.env.PEST_E2E_RUNTIME_DIR = original;
+    }
 });

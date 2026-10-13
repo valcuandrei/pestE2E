@@ -6,7 +6,6 @@ export default {
   expect: {
     timeout: 5_000,
   },
-  outputDir: `.pest-e2e/${process.env.PEST_E2E_RUN_ID || 'default'}/playwright-output`,
   globalSetup: './global-setup.mjs',
   reporter: [
     ['list'],

@@ -1,11 +1,35 @@
 import { mkdir, writeFile } from 'fs/promises';
-import { dirname } from 'path';
+import { tmpdir } from 'os';
+import { dirname, join } from 'path';
 import { readParams, hasAuthTicket, getAuthEndpoint } from './core.mjs';
 import { parseSetCookies } from './setCookieParser.mjs';
 
+/**
+ * Where this run's browser storage state (session cookies) is written.
+ *
+ * pest-e2e passes a private per-run directory in PEST_E2E_RUNTIME_DIR and
+ * deletes it when the run ends. The file must never live in Playwright's
+ * test directory: Playwright walks that whole tree on every invocation, so
+ * per-run files left there slow every later run down.
+ *
+ * Without pest-e2e (running `playwright test` by hand) a per-user directory
+ * under the system temp directory is used instead.
+ *
+ * Evaluated in both the Playwright runner process (global setup writes the
+ * file) and the worker (the config's `use.storageState` reads it); both see
+ * the same environment, so both resolve the same path.
+ */
 export function storageStatePath() {
-    const runId = process.env.PEST_E2E_RUN_ID || Date.now().toString();
-    return `.pest-e2e/${runId}/storageState.json`;
+    const runtimeDir = process.env.PEST_E2E_RUNTIME_DIR;
+
+    if (runtimeDir) {
+        return join(runtimeDir, 'storageState.json');
+    }
+
+    const runId = process.env.PEST_E2E_RUN_ID || 'manual';
+    const user = typeof process.getuid === 'function' ? String(process.getuid()) : 'nouid';
+
+    return join(tmpdir(), `pest-e2e-runtime-${user}`, runId, 'storageState.json');
 }
 
 /**
@@ -203,7 +227,7 @@ export async function globalSetup(_config) {
     const params = await readParams();
 
     const storagePath = storageStatePath();
-    await mkdir(dirname(storagePath), { recursive: true });
+    await mkdir(dirname(storagePath), { recursive: true, mode: 0o700 });
 
     if (!hasAuthTicket(params)) {
         await writeEmptyStorageState(storagePath);
