@@ -6,6 +6,7 @@ Injected into every Node process:
 - `PEST_E2E_TARGET`
 - `PEST_E2E_RUN_ID`
 - `PEST_E2E_REPORT_DIR` (absolute path for runner artifacts)
+- `PEST_E2E_RUNTIME_DIR` (absolute path of a private per-run directory for files that must not outlive the run, such as browser storage state; deleted when the run ends)
 - `PEST_E2E_PARAMS` (JSON)
 - `PEST_E2E_PARAMS_FILE` (absolute path)
 

@@ -629,7 +629,67 @@ Configure it with:
 config('pest-e2e.reports.base_dir');
 ```
 
-Old run directories are pruned according to `reports.prune`. Only directories marked as pestE2E runs are deleted, and the current run directory is never pruned.
+### Automatic pruning
+
+Old run directories are removed automatically; there is no command to schedule.
+
+- Before every Playwright launch pestE2E makes one cheap check (it reads a small timestamp file).
+- At most once per `reports.prune.interval_minutes` (default 15), one process takes a lock and sweeps old runs. Other Pest workers do not wait; they skip the sweep and launch.
+- A sweep that fails never fails a test. It is reported once on `stderr` and tried again after the interval.
+- A large backlog is worked off in bounded passes rather than in one go.
+
+**What is kept**
+
+A run is deleted when it is older than `keep_days` (default 7) **or** it is not among the newest `keep_runs` runs (default 500). Either rule alone is enough, so a run older than `keep_days` is deleted even if fewer than `keep_runs` runs exist. Set a rule to `0` to turn it off.
+
+Whatever those rules say:
+
+- A run that is still in progress is never deleted. Each run holds a lock while it executes, in any Pest worker.
+- A run younger than `grace_minutes` (default 60) is never deleted, so the traces of a recent failure are still there when you look.
+
+**What pestE2E considers its own**
+
+Only runs pestE2E registered itself are deleted. The registry lives beside the reports, in `{reports.base_dir}/.pest-e2e-state/`, because Playwright empties its output directory at the start of every run. Symbolic links are never followed, and nothing outside the report directory is touched.
+
+Directories in the report tree that pestE2E cannot prove it created are left alone. That includes run directories written by versions before this registry existed; see the command below.
+
+### Pruning by hand
+
+```bash
+php artisan pest-e2e:prune-reports --dry-run
+```
+
+| Option | Effect |
+| --- | --- |
+| *(none)* | Apply `keep_days` and `keep_runs` from config |
+| `--dry-run` | List what would be deleted; delete nothing |
+| `--unit=days --value=N` | Delete runs older than N days (replaces both configured rules) |
+| `--unit=items --value=N` | Keep only the newest N runs (replaces both configured rules) |
+| `--all` | Delete every registered run that is not in progress, including recent ones |
+| `--legacy` | Also inspect unregistered directories and report which look like old runs |
+| `--delete-unmarked-legacy-runs` | Delete the unregistered directories that pass validation |
+
+The command works even when automatic pruning is disabled, and uses the same rules: it never deletes a run in progress, never follows links, and only works inside `reports.base_dir`. `--all` does not extend to unregistered directories.
+
+An unregistered directory is only accepted as an old run when it sits at `{base_dir}/{target}/{name}`, is a real directory, is empty or contains Playwright's `.last-run.json`, contains no links, and has not been modified within the grace period. Run with `--legacy --dry-run` first.
+
+### Browser storage state
+
+When a test uses `actingAs()`, the JS harness writes the session cookies to a Playwright storage-state file. That file is sensitive and is not a report:
+
+- It is written to a private per-run directory, `{reports.base_dir}/.pest-e2e-state/{target}/{runId}/runtime/`, passed to the JS process as `PEST_E2E_RUNTIME_DIR`.
+- It is deleted as soon as the run ends, whether it passed, failed or threw. It is never part of the retained report directory.
+- If a process is killed mid-run, the leftover file is removed by the next sweep once the run's lock is gone.
+
+It must not live inside your Playwright test directory. Playwright walks that whole directory on every invocation, so files left there by earlier runs make every later run slower.
+
+**Upgrading from an earlier version.** The harness in `resources/js/pest-e2e/` is a published copy. Republish it to get the new location:
+
+```bash
+php artisan vendor:publish --tag=pest-e2e-js-playwright --force
+```
+
+Until you do, pestE2E removes the file your older harness writes (`<target dir>/.pest-e2e/<runId>/storageState.json`) after each run, so nothing new accumulates. Directories already left there by earlier versions are not removed automatically. If `<target dir>/.pest-e2e/` has grown large, deleting it while no tests are running restores normal discovery speed.
 
 ---
 
@@ -648,9 +708,11 @@ Key config keys in `config/pest-e2e.php`:
 | `server.port` | Base HTTP port for parallel workers. Default: `8800` |
 | `server.parallel_port_offset` | Parallel workers use `server.port + TEST_TOKEN`. Default: `true` |
 | `reports.base_dir` | Base directory for Playwright artifacts. Default: `storage/framework/testing/pest-e2e` |
-| `reports.prune.enabled` | Enable old run pruning. Default: `true` |
-| `reports.prune.keep_runs` | Number of most recent marked runs to keep. Default: `50` |
-| `reports.prune.keep_days` | Age window for marked runs to keep. Default: `7` |
+| `reports.prune.enabled` | Remove old run directories automatically. Default: `true` |
+| `reports.prune.keep_runs` | Keep at most this many newest runs; `0` turns the rule off. Default: `500` |
+| `reports.prune.keep_days` | Keep runs for at most this many days; `0` turns the rule off. Default: `7` |
+| `reports.prune.grace_minutes` | Never delete a run younger than this. Default: `60` |
+| `reports.prune.interval_minutes` | Minimum time between automatic sweeps, shared by all workers. Default: `15` |
 | `timing.enabled` | Enable timing instrumentation. Default: `false`, set via `PEST_E2E_TIMING` |
 | `node_compile_cache.enabled` | Let pestE2E point Node's module compile cache at a per-project temp directory (Node 22.1+). Default: `true`, set via `PEST_E2E_NODE_COMPILE_CACHE` |
 | `js_runner.driver` | JS runner. Default: `playwright` |

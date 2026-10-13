@@ -28,6 +28,7 @@ Laravel-first orchestration: **Pest calls into Node**; **Playwright (or another 
 
 - `PEST_E2E_TARGET`, `PEST_E2E_RUN_ID`
 - `PEST_E2E_PARAMS` (JSON) and/or `PEST_E2E_PARAMS_FILE` (absolute path)
+- `PEST_E2E_REPORT_DIR` (retained artifacts) and `PEST_E2E_RUNTIME_DIR` (private per-run files such as storage state, deleted after the run). Never write generated per-run files inside the Playwright test directory.
 
 Use `readParams()` so you handle both inline and file-based payloads.
 
